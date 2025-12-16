@@ -4,6 +4,7 @@ import {
     fetchDocuments,
     createDocument as createDoc,
     updateDocument as updateDoc,
+    duplicateDocument as duplicateDoc,
     deleteDocument as deleteDoc
 } from '../services/documentService';
 
@@ -13,6 +14,7 @@ interface UseDocumentsReturn {
     error: string | null;
     createDocument: (folderId?: string, title?: string, initialBlocks?: any[]) => Promise<Document | null>;
     updateDocument: (doc: Document) => Promise<void>;
+    duplicateDocument: (docId: string, newTitle: string) => Promise<void>;
     deleteDocument: (docId: string) => Promise<void>;
     refreshDocuments: () => Promise<void>;
 }
@@ -105,6 +107,26 @@ export const useDocuments = (): UseDocumentsReturn => {
         }
     }, []);
 
+    const duplicateDocument = useCallback(async (docId: string, newTitle: string): Promise<void> => {
+        try {
+            const newDoc = await duplicateDoc(docId, newTitle);
+            if (newDoc) {
+                setWorkspaces(prev => prev.map(ws => ({
+                    ...ws,
+                    folders: ws.folders.map(f => {
+                        const hasDoc = f.documents.some(d => d.id === docId);
+                        return hasDoc
+                            ? { ...f, documents: [newDoc, ...f.documents] }
+                            : f;
+                    })
+                })));
+            }
+        } catch (err: any) {
+            console.error('Error duplicating document:', err);
+            setError(err.message);
+        }
+    }, []);
+
     const deleteDocument = useCallback(async (docId: string): Promise<void> => {
         try {
             await deleteDoc(docId);
@@ -128,6 +150,7 @@ export const useDocuments = (): UseDocumentsReturn => {
         error,
         createDocument,
         updateDocument,
+        duplicateDocument,
         deleteDocument,
         refreshDocuments: loadDocuments,
     };

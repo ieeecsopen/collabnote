@@ -100,6 +100,37 @@ export const createDocument = async (title: string = 'Untitled', initialBlocks?:
     return toDocument(data);
 };
 
+// Duplicate a document
+export const duplicateDocument = async (docId: string, newTitle: string): Promise<Document | null> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // 1. Get original content
+    const { data: original, error: fetchError } = await supabase
+        .from('documents')
+        .select('content')
+        .eq('id', docId)
+        .single();
+
+    if (fetchError || !original) return null;
+
+    // 2. Create copy
+    const { data, error } = await supabase
+        .from('documents')
+        .insert({
+            owner_id: user.id,
+            title: newTitle,
+            content: original.content
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    logDocumentCreate(newTitle, data.id);
+    return toDocument(data);
+};
+
 // Update document content
 export const updateDocument = async (
     docId: string,

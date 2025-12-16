@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Workspace, Document } from '../types';
-import { ChevronRight, ChevronDown, Plus, MoreHorizontal, Search, Settings, FileText, Layout, ChevronsUpDown, Home, Trash2, Bell, Brain, GitPullRequest, GraduationCap, Network, TrendingUp, Sparkles, History, Database, CircleHelp } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, MoreHorizontal, Search, Settings, FileText, Layout, ChevronsUpDown, Home, Trash2, Bell, Brain, GitPullRequest, GraduationCap, Network, TrendingUp, Sparkles, History, Database, CircleHelp, Copy, Edit2 } from 'lucide-react';
+import Dialog from './Dialog';
 
 interface SidebarProps {
     workspaces: Workspace[];
@@ -12,6 +13,8 @@ interface SidebarProps {
     onOpenSearch: () => void;
     currentView: string;
     onStartTour?: () => void;
+    onDuplicateDoc?: (docId: string) => void;
+    onRenameDoc?: (docId: string, newTitle: string) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -23,8 +26,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     onNavigate,
     onOpenSearch,
     currentView,
-    onStartTour
+    onStartTour,
+    onDuplicateDoc,
+    onRenameDoc
 }) => {
+    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+    const [modal, setModal] = useState<{ type: 'rename' | 'delete' | null; docId: string | null; title: string | null }>({ type: null, docId: null, title: null });
+    const [renameValue, setRenameValue] = useState('');
+
     const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
         'f1': true,
         'f2': true
@@ -151,26 +160,73 @@ const Sidebar: React.FC<SidebarProps> = ({
                                             <div
                                                 key={doc.id}
                                                 onClick={() => onSelectDoc(doc.id)}
-                                                className={`group flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-all ${activeDocId === doc.id && currentView === 'editor'
+                                                className={`group flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-all relative ${activeDocId === doc.id && currentView === 'editor'
                                                     ? 'bg-slate-800 text-white font-medium shadow-sm ring-1 ring-slate-700/50'
                                                     : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/30'
                                                     }`}
                                             >
                                                 <FileText size={14} className={activeDocId === doc.id && currentView === 'editor' ? 'text-indigo-400' : 'text-slate-600 group-hover:text-slate-500'} />
                                                 <span className="truncate flex-1">{doc.title || 'Untitled'}</span>
-                                                {onDeleteDoc && (
+
+                                                <div className="opacity-0 group-hover:opacity-100 flex items-center">
                                                     <button
-                                                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-900/50 rounded text-slate-500 hover:text-red-400 transition-all"
+                                                        className="p-1 hover:bg-slate-700 rounded text-slate-500 hover:text-slate-300 transition-all"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            if (confirm('Move this document to trash?')) {
-                                                                onDeleteDoc(doc.id);
-                                                            }
+                                                            setActiveMenuId(activeMenuId === doc.id ? null : doc.id);
                                                         }}
-                                                        title="Move to trash"
                                                     >
-                                                        <Trash2 size={12} />
+                                                        <MoreHorizontal size={14} />
                                                     </button>
+                                                </div>
+
+                                                {/* Dropdown Menu */}
+                                                {activeMenuId === doc.id && (
+                                                    <>
+                                                        <div
+                                                            className="fixed inset-0 z-10"
+                                                            onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}
+                                                        />
+                                                        <div className="absolute right-2 top-8 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                                                            {onRenameDoc && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setRenameValue(doc.title);
+                                                                        setModal({ type: 'rename', docId: doc.id, title: doc.title });
+                                                                        setActiveMenuId(null);
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2"
+                                                                >
+                                                                    <Edit2 size={12} /> Rename
+                                                                </button>
+                                                            )}
+                                                            {onDuplicateDoc && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        onDuplicateDoc(doc.id);
+                                                                        setActiveMenuId(null);
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2"
+                                                                >
+                                                                    <Copy size={12} /> Duplicate
+                                                                </button>
+                                                            )}
+                                                            {onDeleteDoc && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setModal({ type: 'delete', docId: doc.id, title: doc.title });
+                                                                        setActiveMenuId(null);
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-900/30 hover:text-red-300 flex items-center gap-2 border-t border-slate-700/50 mt-1 pt-1"
+                                                                >
+                                                                    <Trash2 size={12} /> Delete
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </>
                                                 )}
                                             </div>
                                         ))}
@@ -202,7 +258,48 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                 )}
             </div>
-        </div>
+
+
+            {/* Modals */}
+            <Dialog
+                isOpen={modal.type === 'rename'}
+                onClose={() => setModal({ type: null, docId: null, title: null })}
+                title="Rename Document"
+                confirmLabel="Rename"
+                onConfirm={() => {
+                    if (modal.docId && onRenameDoc && renameValue.trim()) {
+                        onRenameDoc(modal.docId, renameValue.trim());
+                    }
+                }}
+            >
+                <div className="space-y-3">
+                    <label className="block text-sm font-medium text-slate-700">Name</label>
+                    <input
+                        type="text"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-900"
+                        autoFocus
+                    />
+                </div>
+            </Dialog>
+
+            <Dialog
+                isOpen={modal.type === 'delete'}
+                onClose={() => setModal({ type: null, docId: null, title: null })}
+                title="Move to Trash"
+                confirmLabel="Delete"
+                isDestructive
+                onConfirm={() => {
+                    if (modal.docId && onDeleteDoc) {
+                        onDeleteDoc(modal.docId);
+                    }
+                }}
+            >
+                <p>Are you sure you want to move <strong>{modal.title}</strong> to the trash?</p>
+                <p className="mt-2 text-xs text-slate-500">You can restore it anytime from the Trash.</p>
+            </Dialog>
+        </div >
     );
 };
 

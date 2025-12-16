@@ -54,6 +54,7 @@ const AppContent: React.FC = () => {
         isLoading: docsLoading,
         createDocument: createDoc,
         updateDocument: updateDoc,
+        duplicateDocument: duplicateDoc,
         deleteDocument: deleteDoc
     } = useDocuments();
 
@@ -129,6 +130,20 @@ const AppContent: React.FC = () => {
         setDeletedDocs(prev => prev.filter(d => d.id !== docId));
         deleteDoc(docId);
     };
+
+    const handleDuplicateDoc = useCallback(async (docId: string) => {
+        const doc = workspaces.flatMap(w => w.folders).flatMap(f => f.documents).find(d => d.id === docId);
+        if (doc) {
+            await duplicateDoc(docId, `${doc.title} (Copy)`);
+        }
+    }, [workspaces, duplicateDoc]);
+
+    const handleRenameDoc = useCallback(async (docId: string, newTitle: string) => {
+        const doc = workspaces.flatMap(w => w.folders).flatMap(f => f.documents).find(d => d.id === docId);
+        if (doc) {
+            await updateDoc({ ...doc, title: newTitle });
+        }
+    }, [workspaces, updateDoc]);
 
     const getAllRecentDocs = useCallback(() => {
         const docs: Document[] = [];
@@ -216,6 +231,8 @@ const AppContent: React.FC = () => {
                 onOpenSearch={() => setIsSearchOpen(true)}
                 currentView={currentView}
                 onStartTour={startTour}
+                onDuplicateDoc={handleDuplicateDoc}
+                onRenameDoc={handleRenameDoc}
             />
 
             <main className="flex-1 bg-white rounded-2xl shadow-xl overflow-hidden relative border border-slate-800/50">
