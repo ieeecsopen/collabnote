@@ -44,9 +44,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
 
     const navItemClass = (isActive: boolean) =>
-        `w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
-            ? 'bg-slate-800 text-white shadow-sm ring-1 ring-slate-700'
-            : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+        `w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 group relative ${isActive
+            ? 'bg-indigo-500/10 text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.15)] ring-1 ring-indigo-500/20'
+            : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
         }`;
 
     const SectionHeader = ({ title }: { title: string }) => (
@@ -54,10 +54,10 @@ const Sidebar: React.FC<SidebarProps> = ({
     );
 
     return (
-        <div className="w-[260px] h-full flex flex-col text-slate-300">
+        <div className="w-[260px] h-full flex flex-col text-slate-300 bg-slate-900/80 backdrop-blur-xl border-r border-white/5 shadow-2xl relative z-50">
             {/* Workspace Switcher */}
-            <div className="mb-4 pt-1">
-                <button className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-800/50 rounded-lg transition-colors text-left group">
+            <div className="mb-4 pt-3 px-3">
+                <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl transition-all duration-300 text-left group border border-transparent hover:border-white/10">
                     <div className="w-8 h-8 bg-white rounded-lg text-black flex items-center justify-center font-bold text-xs shadow-lg shadow-white/10">
                         C
                     </div>

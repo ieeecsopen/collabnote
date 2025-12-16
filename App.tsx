@@ -57,16 +57,25 @@ const AppContent: React.FC = () => {
         updateDocument: updateDoc,
         duplicateDocument: duplicateDoc,
         deleteDocument: deleteDoc,
-        error: docsError
+        error: docsError,
+        refreshDocuments: refreshDocs
     } = useDocuments();
 
     const { showError } = useDialog();
 
     useEffect(() => {
-        if (docsError) {
+        if (user) {
+            refreshDocs();
+        }
+    }, [user, refreshDocs]);
+
+    useEffect(() => {
+        // Only show document errors if user is authenticated and the error is not 'Not authenticated'
+        // 'Not authenticated' might happen during initial load before auth state settles
+        if (docsError && user && !docsError.includes('Not authenticated')) {
             showError(docsError);
         }
-    }, [docsError, showError]);
+    }, [docsError, showError, user]);
 
     const [deletedDocs, setDeletedDocs] = useState<Document[]>([]);
     const [activeDocId, setActiveDocId] = useState<string>('');
@@ -224,7 +233,14 @@ const AppContent: React.FC = () => {
     };
 
     return (
-        <div className="flex w-full h-screen bg-slate-950 p-3 gap-3">
+        <div className="flex w-full h-screen bg-slate-950 p-3 gap-3 relative overflow-hidden">
+            {/* Ambient Background Mesh - Monochrome Smoke */}
+            <div className="absolute top-0 left-0 w-full h-full bg-[#09090b]">
+                <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-slate-500/10 rounded-full blur-[120px] opacity-40 animate-pulse"></div>
+                <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-white/5 rounded-full blur-[100px] opacity-30"></div>
+                <div className="absolute top-[30%] right-[20%] w-[30%] h-[30%] bg-gray-500/10 rounded-full blur-[80px] opacity-20"></div>
+            </div>
+
             <Sidebar
                 workspaces={workspaces}
                 activeDocId={activeDocId}

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import Dialog from '../components/Dialog';
 
 interface DialogOptions {
@@ -26,38 +26,38 @@ export const DialogProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         message: '',
     });
 
-    const showDialog = (options: DialogOptions) => {
+    const showDialog = useCallback((options: DialogOptions) => {
         setConfig(options);
         setIsOpen(true);
-    };
+    }, []);
 
-    const showError = (message: string) => {
+    const showError = useCallback((message: string) => {
         showDialog({
             title: 'Error',
             message: message,
             confirmLabel: 'OK',
-            cancelLabel: undefined, // Hide cancel for alerts
+            cancelLabel: undefined,
             isDestructive: true
         });
-    };
+    }, [showDialog]);
 
-    const showSuccess = (message: string) => {
+    const showSuccess = useCallback((message: string) => {
         showDialog({
             title: 'Success',
             message: message,
             confirmLabel: 'OK',
             cancelLabel: undefined,
         });
-    };
+    }, [showDialog]);
 
-    const showAlert = (message: string) => {
+    const showAlert = useCallback((message: string) => {
         showDialog({
             title: 'Alert',
             message: message,
             confirmLabel: 'OK',
             cancelLabel: undefined,
         });
-    }
+    }, [showDialog]);
 
     const handleClose = () => {
         setIsOpen(false);
