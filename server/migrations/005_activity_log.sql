@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS public.activity_log (
 
 ALTER TABLE public.activity_log ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (for re-running migration)
+DROP POLICY IF EXISTS "Users can view own activity" ON public.activity_log;
+DROP POLICY IF EXISTS "Users can view document activity" ON public.activity_log;
+DROP POLICY IF EXISTS "Users can log own activity" ON public.activity_log;
+
 -- Users can view their own activity
 CREATE POLICY "Users can view own activity"
   ON public.activity_log FOR SELECT
