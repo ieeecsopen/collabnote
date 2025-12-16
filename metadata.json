@@ -1,0 +1,7 @@
+{
+  "name": "CollabNote",
+  "description": "A modern, Notion-inspired collaborative workspace with AI-powered editing capabilities.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
