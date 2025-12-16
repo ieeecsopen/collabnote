@@ -11,6 +11,7 @@ export const useTour = () => {
             showProgress: true,
             animate: true,
             overlayOpacity: 0.6,
+            popoverClass: 'driver-theme',
             steps: [
                 {
                     element: '#nav-dashboard',

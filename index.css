@@ -3,10 +3,12 @@
 @tailwind utilities;
 
 /* Custom driver.js styling for premium feel */
-.driver-popover {
-    background-color: rgba(30, 41, 59, 0.95); /* Slate-800 equivalent with opacity */
-    color: #f8fafc; /* Slate-50 */
-    border: 1px solid rgba(148, 163, 184, 0.2);
+.driver-popover.driver-theme {
+    background-color: rgba(30, 41, 59, 0.95) !important;
+    /* Slate-800 equivalent with opacity */
+    color: #f8fafc !important;
+    /* Slate-50 */
+    border: 1px solid rgba(148, 163, 184, 0.2) !important;
     border-radius: 12px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     backdrop-filter: blur(12px);
@@ -14,29 +16,32 @@
     max-width: 350px;
 }
 
-.driver-popover-title {
+.driver-popover.driver-theme .driver-popover-title {
     font-family: 'Inter', sans-serif;
     font-size: 1.1rem;
     font-weight: 600;
     margin-bottom: 8px;
-    color: #fff;
+    color: #fff !important;
 }
 
-.driver-popover-description {
+.driver-popover.driver-theme .driver-popover-description {
     font-family: 'Inter', sans-serif;
     font-size: 0.9rem;
     line-height: 1.5;
-    color: #cbd5e1; /* Slate-300 */
+    color: #cbd5e1 !important;
+    /* Slate-300 */
     margin-bottom: 20px !important;
 }
 
-.driver-popover-footer {
+.driver-popover.driver-theme .driver-popover-footer {
     margin-top: 15px;
 }
 
-.driver-popover-footer button {
-    background-color: #f8fafc; /* Slate-50 */
-    color: #0f172a; /* Slate-900 */
+.driver-popover.driver-theme .driver-popover-footer button {
+    background-color: #f8fafc !important;
+    /* Slate-50 */
+    color: #0f172a !important;
+    /* Slate-900 */
     border: none;
     padding: 8px 16px;
     border-radius: 6px;
@@ -48,7 +53,8 @@
 }
 
 .driver-popover-footer button:hover {
-    background-color: #e2e8f0; /* Slate-200 */
+    background-color: #e2e8f0;
+    /* Slate-200 */
 }
 
 .driver-popover-footer button.driver-close-btn {
@@ -83,9 +89,11 @@
     border-bottom-color: rgba(30, 41, 59, 0.95);
 }
 
-/* Attempt to blur the surroundings */
-/* This depends on driver.js implementation, v1.0 uses SVG overlay */
-.driver-overlay, #driver-page-overlay {
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+/* Attempt to blur the surroundings - REMOVED due to highlighting issues
+   backdrop-filter applies to the entire element bounds, blurring the cutout too.
+*/
+.driver-overlay,
+#driver-page-overlay {
+    /* backdrop-filter: blur(4px); */
+    /* -webkit-backdrop-filter: blur(4px); */
 }
