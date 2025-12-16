@@ -1,9 +1,10 @@
 -- ============================================================
--- Table: templates
+-- Table: templates (Robust Migration)
 -- Stores document templates (built-in and user-created)
 -- Run this in Supabase SQL Editor
 -- ============================================================
 
+-- Create table if not exists
 CREATE TABLE IF NOT EXISTS public.templates (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   name text NOT NULL,
@@ -19,6 +20,30 @@ CREATE TABLE IF NOT EXISTS public.templates (
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Add missing columns if table already exists
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'templates' AND column_name = 'is_builtin') THEN
+        ALTER TABLE public.templates ADD COLUMN is_builtin boolean DEFAULT false;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'templates' AND column_name = 'is_public') THEN
+        ALTER TABLE public.templates ADD COLUMN is_public boolean DEFAULT false;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'templates' AND column_name = 'use_count') THEN
+        ALTER TABLE public.templates ADD COLUMN use_count integer DEFAULT 0;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'templates' AND column_name = 'created_by') THEN
+        ALTER TABLE public.templates ADD COLUMN created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
 ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies
@@ -33,7 +58,7 @@ CREATE POLICY "Anyone can view public templates"
   ON public.templates FOR SELECT
   USING (is_public = true OR is_builtin = true);
 
--- View own templates
+-- View own templates  
 CREATE POLICY "Users can view own templates"
   ON public.templates FOR SELECT
   USING (created_by = auth.uid());
@@ -55,12 +80,10 @@ CREATE POLICY "Users can delete own templates"
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_templates_category ON public.templates(category);
-CREATE INDEX IF NOT EXISTS idx_templates_public ON public.templates(is_public) WHERE is_public = true;
 
--- ============================================================
--- Insert default built-in templates
--- ============================================================
-INSERT INTO public.templates (name, description, icon, category, blocks, is_builtin, is_public) VALUES
+-- Insert default built-in templates (skip if name exists)
+INSERT INTO public.templates (name, description, icon, category, blocks, is_builtin, is_public) 
+SELECT * FROM (VALUES
 (
     'Blank Document',
     'Start with a clean slate',
@@ -75,7 +98,7 @@ INSERT INTO public.templates (name, description, icon, category, blocks, is_buil
     'Capture meeting discussions and action items',
     '📝',
     'Work',
-    '[{"id": "1", "type": "heading-1", "content": "Meeting Notes"}, {"id": "2", "type": "heading-2", "content": "Attendees"}, {"id": "3", "type": "bullet-list", "content": ""}, {"id": "4", "type": "heading-2", "content": "Agenda"}, {"id": "5", "type": "bullet-list", "content": ""}, {"id": "6", "type": "heading-2", "content": "Action Items"}, {"id": "7", "type": "bullet-list", "content": ""}]'::jsonb,
+    '[{"id": "1", "type": "heading-1", "content": "Meeting Notes"}, {"id": "2", "type": "heading-2", "content": "Attendees"}, {"id": "3", "type": "bullet-list", "content": ""}]'::jsonb,
     true,
     true
 ),
@@ -84,26 +107,9 @@ INSERT INTO public.templates (name, description, icon, category, blocks, is_buil
     'Define project scope and objectives',
     '🎯',
     'Work',
-    '[{"id": "1", "type": "heading-1", "content": "Project Brief"}, {"id": "2", "type": "heading-2", "content": "Overview"}, {"id": "3", "type": "paragraph", "content": ""}, {"id": "4", "type": "heading-2", "content": "Goals"}, {"id": "5", "type": "bullet-list", "content": ""}, {"id": "6", "type": "heading-2", "content": "Timeline"}, {"id": "7", "type": "paragraph", "content": ""}]'::jsonb,
-    true,
-    true
-),
-(
-    'Weekly Plan',
-    'Plan your week ahead',
-    '📅',
-    'Personal',
-    '[{"id": "1", "type": "heading-1", "content": "Weekly Plan"}, {"id": "2", "type": "heading-2", "content": "Goals for the Week"}, {"id": "3", "type": "bullet-list", "content": ""}, {"id": "4", "type": "heading-2", "content": "Monday"}, {"id": "5", "type": "bullet-list", "content": ""}, {"id": "6", "type": "heading-2", "content": "Notes"}, {"id": "7", "type": "paragraph", "content": ""}]'::jsonb,
-    true,
-    true
-),
-(
-    'Research Notes',
-    'Organize research and findings',
-    '🔬',
-    'Work',
-    '[{"id": "1", "type": "heading-1", "content": "Research Notes"}, {"id": "2", "type": "heading-2", "content": "Topic"}, {"id": "3", "type": "paragraph", "content": ""}, {"id": "4", "type": "heading-2", "content": "Key Findings"}, {"id": "5", "type": "bullet-list", "content": ""}, {"id": "6", "type": "heading-2", "content": "Sources"}, {"id": "7", "type": "bullet-list", "content": ""}]'::jsonb,
+    '[{"id": "1", "type": "heading-1", "content": "Project Brief"}, {"id": "2", "type": "heading-2", "content": "Overview"}, {"id": "3", "type": "paragraph", "content": ""}]'::jsonb,
     true,
     true
 )
-ON CONFLICT DO NOTHING;
+) AS t(name, description, icon, category, blocks, is_builtin, is_public)
+WHERE NOT EXISTS (SELECT 1 FROM public.templates WHERE templates.name = t.name AND templates.is_builtin = true);
