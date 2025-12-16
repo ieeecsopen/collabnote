@@ -46,57 +46,8 @@ const getNodeColor = (id: string, index: number): string => {
     return NODE_COLORS[(hash + index) % NODE_COLORS.length];
 };
 
-// Calculate node positions using a simple force-directed-like layout
-const calculateLayout = (
-    nodes: { id: string; connections: number }[],
-    links: GraphLink[],
-    width: number,
-    height: number
-): Map<string, { x: number; y: number }> => {
-    const positions = new Map<string, { x: number; y: number }>();
-    const centerX = width / 2;
-    const centerY = height / 2;
-
-    if (nodes.length === 0) return positions;
-
-    // Sort by connections (most connected in center)
-    const sorted = [...nodes].sort((a, b) => b.connections - a.connections);
-
-    // Place most connected node in center
-    if (sorted.length > 0) {
-        positions.set(sorted[0].id, { x: centerX, y: centerY });
-    }
-
-    // Place other nodes in concentric circles
-    const radius = Math.min(width, height) * 0.35;
-    let ring = 1;
-    let angleOffset = 0;
-
-    for (let i = 1; i < sorted.length; i++) {
-        const nodesInRing = Math.max(6, ring * 6);
-        const positionInRing = (i - 1) % nodesInRing;
-        const angle = (2 * Math.PI * positionInRing) / nodesInRing + angleOffset;
-
-        const r = radius * (0.4 + ring * 0.3);
-        const x = centerX + Math.cos(angle) * r;
-        const y = centerY + Math.sin(angle) * r;
-
-        positions.set(sorted[i].id, { x, y });
-
-        if (positionInRing === nodesInRing - 1) {
-            ring++;
-            angleOffset += Math.PI / 6; // Offset each ring
-        }
-    }
-
-    return positions;
-};
-
-// Fetch all documents and links for the knowledge graph
-export const fetchKnowledgeGraph = async (
-    width: number = 800,
-    height: number = 600
-): Promise<KnowledgeGraph> => {
+// Output graph data for react-force-graph-2d
+export const fetchKnowledgeGraph = async (): Promise<KnowledgeGraph> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { nodes: [], links: [] };
 
@@ -115,12 +66,12 @@ export const fetchKnowledgeGraph = async (
 
     // Fetch document links
     const docIds = documents.map(d => d.id);
-    const { data: linkData, error: linkError } = await supabase
+    const { data: linkData } = await supabase
         .from('document_links')
         .select('*')
         .or(`source_document_id.in.(${docIds.join(',')}),target_document_id.in.(${docIds.join(',')})`);
 
-    // Count connections per document
+    // Count connections per document for sizing
     const connectionCount = new Map<string, number>();
     documents.forEach(d => connectionCount.set(d.id, 0));
 
@@ -133,30 +84,25 @@ export const fetchKnowledgeGraph = async (
             targetId: link.target_document_id,
             type: link.link_type || 'reference',
             strength: link.strength || 1,
+            // ForceGraph expects 'source' and 'target' objects or IDs
+            source: link.source_document_id,
+            target: link.target_document_id
         };
     });
 
-    // Calculate positions
-    const nodeData = documents.map(d => ({
-        id: d.id,
-        connections: connectionCount.get(d.id) || 0,
-    }));
-    const positions = calculateLayout(nodeData, links, width, height);
-
-    // Build nodes
+    // Build nodes without manual position (let force engine handle it)
     const nodes: GraphNode[] = documents.map((doc, i) => {
-        const pos = positions.get(doc.id) || { x: width / 2, y: height / 2 };
         const connections = connectionCount.get(doc.id) || 0;
-
         return {
             id: doc.id,
             title: doc.title || 'Untitled',
             icon: doc.content?.icon || '📄',
-            x: pos.x,
-            y: pos.y,
-            radius: Math.max(20, Math.min(50, 20 + connections * 5)),
+            x: 0, // Initial, will be overwritten by engine
+            y: 0,
+            radius: Math.max(4, Math.min(10, 4 + connections)), // Smaller radius for canvas rendering
             color: getNodeColor(doc.id, i),
             connections,
+            val: Math.max(1, connections) // 'val' is used by engine for node relative size sometimes
         };
     });
 
