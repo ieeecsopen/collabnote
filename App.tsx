@@ -170,7 +170,7 @@ const AppContent: React.FC = () => {
             case 'analytics': return <Analytics />;
             case 'review': return <ReviewMode />;
             case 'assistant': return <Assistant />;
-            case 'timeline': return <Timeline />;
+            case 'timeline': return <Timeline onSelectDocument={handleSelectDoc} />;
             case 'data': return <DataControl />;
 
             case 'editor':
