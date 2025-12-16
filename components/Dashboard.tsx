@@ -17,7 +17,7 @@ const Dashboard: React.FC<DashboardProps> = ({ recentDocs, onSelectDoc, user, on
     return (
         <div className="flex-1 h-full overflow-y-auto bg-slate-50/50 scroll-smooth p-8 lg:p-12 relative">
             {/* Background decoration */}
-            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-indigo-50/50 to-transparent -z-10 pointer-events-none" />
+            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-slate-200/50 to-transparent -z-10 pointer-events-none" />
 
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
