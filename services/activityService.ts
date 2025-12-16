@@ -1,58 +1,143 @@
 import { supabase } from './supabase';
+import { RealtimeChannel } from '@supabase/supabase-js';
+
+export type ActivityType = 'create' | 'edit' | 'delete' | 'comment' | 'share' | 'view';
 
 export interface ActivityEvent {
     id: string;
-    type: 'edit' | 'comment' | 'commit' | 'create' | 'delete';
+    type: ActivityType;
     userId: string;
     userName: string;
+    userAvatar?: string;
     action: string;
     target: string;
     targetId?: string;
+    targetType?: string;
     details?: string;
     createdAt: Date;
 }
 
-// Fetch recent activity for current user
-export const fetchActivity = async (limit: number = 20): Promise<ActivityEvent[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return getDefaultActivity();
+export interface ActivityFilter {
+    type?: ActivityType | ActivityType[];
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    targetId?: string;
+}
 
-    const { data, error } = await supabase
+// Convert DB record to ActivityEvent
+const toActivityEvent = (record: any): ActivityEvent => ({
+    id: record.id,
+    type: record.action_type || 'edit',
+    userId: record.user_id,
+    userName: record.profiles?.username || 'Unknown',
+    userAvatar: record.profiles?.avatar_url,
+    action: record.action || 'modified',
+    target: record.target_title || 'Document',
+    targetId: record.target_id,
+    targetType: record.target_type || 'document',
+    details: record.details,
+    createdAt: new Date(record.created_at),
+});
+
+// Fetch activity with optional filters
+export const fetchActivity = async (
+    limit: number = 50,
+    filters?: ActivityFilter
+): Promise<ActivityEvent[]> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    let query = supabase
         .from('activity_log')
-        .select('*, profiles(username)')
-        .eq('user_id', user.id)
+        .select('*, profiles(username, avatar_url)')
         .order('created_at', { ascending: false })
         .limit(limit);
 
-    if (error || !data || data.length === 0) {
-        return getDefaultActivity();
+    // Apply filters
+    if (filters?.type) {
+        if (Array.isArray(filters.type)) {
+            query = query.in('action_type', filters.type);
+        } else {
+            query = query.eq('action_type', filters.type);
+        }
     }
 
-    return data.map(a => ({
-        id: a.id,
-        type: a.action_type || 'edit',
-        userId: a.user_id,
-        userName: a.profiles?.username || 'You',
-        action: a.action || 'modified',
-        target: a.target_title || 'Document',
-        targetId: a.target_id,
-        details: a.details,
-        createdAt: new Date(a.created_at),
-    }));
+    if (filters?.userId) {
+        query = query.eq('user_id', filters.userId);
+    }
+
+    if (filters?.startDate) {
+        query = query.gte('created_at', filters.startDate.toISOString());
+    }
+
+    if (filters?.endDate) {
+        query = query.lte('created_at', filters.endDate.toISOString());
+    }
+
+    if (filters?.targetId) {
+        query = query.eq('target_id', filters.targetId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('Error fetching activity:', error);
+        return [];
+    }
+
+    return (data || []).map(toActivityEvent);
 };
 
-// Log a new activity
+// Subscribe to real-time activity updates
+export const subscribeToActivity = (
+    callback: (event: ActivityEvent) => void
+): RealtimeChannel => {
+    const channel = supabase
+        .channel('activity_log_changes')
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'activity_log',
+            },
+            async (payload) => {
+                // Fetch the full record with profile join
+                const { data } = await supabase
+                    .from('activity_log')
+                    .select('*, profiles(username, avatar_url)')
+                    .eq('id', payload.new.id)
+                    .single();
+
+                if (data) {
+                    callback(toActivityEvent(data));
+                }
+            }
+        )
+        .subscribe();
+
+    return channel;
+};
+
+// Unsubscribe from activity updates
+export const unsubscribeFromActivity = (channel: RealtimeChannel): void => {
+    supabase.removeChannel(channel);
+};
+
+// Log a new activity event
 export const logActivity = async (
-    actionType: ActivityEvent['type'],
+    actionType: ActivityType,
     action: string,
     target: string,
     targetId?: string,
-    details?: string
-): Promise<void> => {
+    details?: string,
+    targetType: string = 'document'
+): Promise<boolean> => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) return false;
 
-    await supabase
+    const { error } = await supabase
         .from('activity_log')
         .insert({
             user_id: user.id,
@@ -60,9 +145,32 @@ export const logActivity = async (
             action,
             target_title: target,
             target_id: targetId,
+            target_type: targetType,
             details
         });
+
+    if (error) {
+        console.error('Error logging activity:', error);
+        return false;
+    }
+    return true;
 };
+
+// Convenience functions for common actions
+export const logDocumentCreate = (title: string, docId: string) =>
+    logActivity('create', 'created', title, docId, undefined, 'document');
+
+export const logDocumentEdit = (title: string, docId: string) =>
+    logActivity('edit', 'edited', title, docId, undefined, 'document');
+
+export const logDocumentDelete = (title: string, docId: string) =>
+    logActivity('delete', 'moved to trash', title, docId, undefined, 'document');
+
+export const logDocumentShare = (title: string, docId: string, sharedWith: string) =>
+    logActivity('share', 'shared', title, docId, `Shared with ${sharedWith}`, 'document');
+
+export const logComment = (docTitle: string, docId: string, comment: string) =>
+    logActivity('comment', 'commented on', docTitle, docId, comment.slice(0, 100), 'document');
 
 // Format relative time
 export const formatRelativeTime = (date: Date): string => {
@@ -80,9 +188,28 @@ export const formatRelativeTime = (date: Date): string => {
     return date.toLocaleDateString();
 };
 
-// Default activity for demo
-const getDefaultActivity = (): ActivityEvent[] => [
-    { id: '1', type: 'edit', userId: '1', userName: 'You', action: 'edited', target: 'Q4 Roadmap', createdAt: new Date(Date.now() - 3600000) },
-    { id: '2', type: 'comment', userId: '1', userName: 'You', action: 'commented on', target: 'Architecture Review', createdAt: new Date(Date.now() - 7200000) },
-    { id: '3', type: 'create', userId: '1', userName: 'You', action: 'created', target: 'Meeting Notes', createdAt: new Date(Date.now() - 86400000) },
-];
+// Get activity grouped by date
+export const getActivityByDate = (events: ActivityEvent[]): Map<string, ActivityEvent[]> => {
+    const grouped = new Map<string, ActivityEvent[]>();
+
+    events.forEach(event => {
+        const dateKey = event.createdAt.toDateString();
+        const existing = grouped.get(dateKey) || [];
+        existing.push(event);
+        grouped.set(dateKey, existing);
+    });
+
+    return grouped;
+};
+
+// Get date label
+export const getDateLabel = (dateString: string): string => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+};
