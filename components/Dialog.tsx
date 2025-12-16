@@ -18,7 +18,7 @@ const Dialog: React.FC<DialogProps> = ({
     title,
     children,
     confirmLabel = 'Confirm',
-    cancelLabel = 'Cancel',
+    cancelLabel,
     onConfirm,
     isDestructive = false
 }) => {
@@ -59,18 +59,20 @@ const Dialog: React.FC<DialogProps> = ({
                 </div>
 
                 <div className="flex items-center justify-end gap-2 px-4 py-3 bg-slate-50 border-t border-slate-100">
-                    <button
-                        onClick={onClose}
-                        className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/50 rounded-lg transition-colors"
-                    >
-                        {cancelLabel}
-                    </button>
+                    {cancelLabel && (
+                        <button
+                            onClick={onClose}
+                            className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/50 rounded-lg transition-colors"
+                        >
+                            {cancelLabel}
+                        </button>
+                    )}
                     {onConfirm && (
                         <button
                             onClick={() => { onConfirm(); onClose(); }}
                             className={`px-3 py-1.5 text-sm font-medium text-white rounded-lg transition-colors shadow-sm ${isDestructive
-                                    ? 'bg-red-600 hover:bg-red-700'
-                                    : 'bg-indigo-600 hover:bg-indigo-700'
+                                ? 'bg-red-600 hover:bg-red-700'
+                                : 'bg-indigo-600 hover:bg-indigo-700'
                                 }`}
                         >
                             {confirmLabel}

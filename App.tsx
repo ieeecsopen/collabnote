@@ -27,6 +27,7 @@ import { useDocuments } from './hooks/useDocuments';
 import { getDocumentCollaborators } from './services/profileService';
 import { moveToTrash } from './services/documentService';
 import { useTour } from './hooks/useTour';
+import { DialogProvider, useDialog } from './contexts/DialogContext';
 
 type ViewType =
     | 'editor'
@@ -55,8 +56,17 @@ const AppContent: React.FC = () => {
         createDocument: createDoc,
         updateDocument: updateDoc,
         duplicateDocument: duplicateDoc,
-        deleteDocument: deleteDoc
+        deleteDocument: deleteDoc,
+        error: docsError
     } = useDocuments();
+
+    const { showError } = useDialog();
+
+    useEffect(() => {
+        if (docsError) {
+            showError(docsError);
+        }
+    }, [docsError, showError]);
 
     const [deletedDocs, setDeletedDocs] = useState<Document[]>([]);
     const [activeDocId, setActiveDocId] = useState<string>('');
@@ -253,7 +263,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <AuthProvider>
-            <AppContent />
+            <DialogProvider>
+                <AppContent />
+            </DialogProvider>
         </AuthProvider>
     );
 };

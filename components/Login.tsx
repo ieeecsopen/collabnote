@@ -16,6 +16,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const [name, setName] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { showSuccess, showError } = useDialog();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -26,7 +27,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             if (view === 'forgot-password') {
                 const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
                 if (resetError) throw resetError;
-                alert('Password reset link sent! Check your email.');
+                showSuccess('Password reset link sent! Check your email.');
                 setView('login');
             } else if (view === 'register') {
                 // Sign Up
@@ -54,7 +55,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         };
                         onLogin(user);
                     } else {
-                        alert('Registration successful! Please check your email to confirm your account.');
+                        showSuccess('Registration successful! Please check your email to confirm your account.');
                         setView('login');
                     }
                 }
@@ -81,7 +82,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             }
         } catch (err: any) {
             console.error('Auth Error:', err);
-            setError(err.message || 'An unexpected error occurred');
+            const msg = err.message || 'An unexpected error occurred';
+            setError(msg);
+            showError(msg);
         } finally {
             setIsLoading(false);
         }
