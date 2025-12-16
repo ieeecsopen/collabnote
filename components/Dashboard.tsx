@@ -25,21 +25,21 @@ const Dashboard: React.FC<DashboardProps> = ({ recentDocs, onSelectDoc, user, on
 
                 {/* Quick Stats / Actions */}
                 <div className="grid grid-cols-3 gap-6 mb-12">
-                     <div 
+                    <div
                         onClick={onCreateDoc}
-                        className="p-6 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white cursor-pointer hover:shadow-lg hover:shadow-indigo-500/20 transition-all group"
-                     >
-                         <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mb-4 backdrop-blur-sm group-hover:bg-white/30 transition-colors">
-                             <Plus size={20} className="text-white" />
-                         </div>
-                         <h3 className="font-semibold text-lg mb-1">New Document</h3>
-                         <p className="text-indigo-100 text-sm">Create a new page in your workspace</p>
-                     </div>
+                        className="p-6 rounded-xl bg-slate-950 text-white cursor-pointer hover:shadow-lg hover:shadow-slate-900/20 transition-all group"
+                    >
+                        <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mb-4 backdrop-blur-sm group-hover:bg-white/30 transition-colors">
+                            <Plus size={20} className="text-white" />
+                        </div>
+                        <h3 className="font-semibold text-lg mb-1">New Document</h3>
+                        <p className="text-slate-400 text-sm">Create a new page in your workspace</p>
+                    </div>
 
-                     <div className="p-6 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all">
+                    <div className="p-6 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all">
                         <div className="flex items-center gap-3 mb-2">
-                             <Activity size={20} className="text-orange-500" />
-                             <h3 className="font-semibold text-slate-900">Activity</h3>
+                            <Activity size={20} className="text-orange-500" />
+                            <h3 className="font-semibold text-slate-900">Activity</h3>
                         </div>
                         <div className="space-y-3 mt-4">
                             <div className="flex items-center gap-2 text-sm">
@@ -51,17 +51,17 @@ const Dashboard: React.FC<DashboardProps> = ({ recentDocs, onSelectDoc, user, on
                                 <span className="text-slate-600">You created <span className="font-medium text-slate-900">Meeting Notes</span></span>
                             </div>
                         </div>
-                     </div>
-                     
-                     <div className="p-6 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all">
+                    </div>
+
+                    <div className="p-6 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all">
                         <div className="flex items-center gap-3 mb-2">
-                             <Star size={20} className="text-yellow-500" />
-                             <h3 className="font-semibold text-slate-900">Favorites</h3>
+                            <Star size={20} className="text-yellow-500" />
+                            <h3 className="font-semibold text-slate-900">Favorites</h3>
                         </div>
                         <div className="mt-4 text-center py-2">
                             <span className="text-sm text-slate-400 italic">No favorites pinned yet</span>
                         </div>
-                     </div>
+                    </div>
                 </div>
 
                 {/* Recent Documents */}
@@ -78,7 +78,7 @@ const Dashboard: React.FC<DashboardProps> = ({ recentDocs, onSelectDoc, user, on
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {recentDocs.length > 0 ? recentDocs.slice(0, 6).map(doc => (
-                            <div 
+                            <div
                                 key={doc.id}
                                 onClick={() => onSelectDoc(doc.id)}
                                 className="group p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-200 hover:shadow-md transition-all cursor-pointer flex items-start gap-4"

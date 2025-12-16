@@ -9,17 +9,25 @@
         "build": "tsc"
     },
     "dependencies": {
+        "@supabase/supabase-js": "^2.87.3",
+        "@types/bcryptjs": "^2.4.6",
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/redis": "^4.0.10",
+        "axios": "^1.13.2",
+        "bcryptjs": "^3.0.3",
         "cors": "^2.8.5",
         "dotenv": "^16.4.5",
         "express": "^4.19.2",
+        "jsonwebtoken": "^9.0.3",
         "pg": "^8.11.5",
+        "redis": "^5.10.0",
         "ws": "^8.16.0",
         "y-websocket": "^2.0.2",
         "yjs": "^13.6.14"
     },
     "devDependencies": {
         "@types/cors": "^2.8.17",
-        "@types/express": "^4.17.21",
+        "@types/express": "^4.17.25",
         "@types/node": "^20.12.7",
         "@types/pg": "^8.11.5",
         "@types/ws": "^8.5.10",
