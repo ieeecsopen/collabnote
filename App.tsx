@@ -166,7 +166,7 @@ const AppContent: React.FC = () => {
             case 'thinking': return <ThinkingCanvas />;
             case 'decisions': return <DecisionLog />;
             case 'study': return <StudyMode />;
-            case 'knowledge-map': return <KnowledgeMap />;
+            case 'knowledge-map': return <KnowledgeMap onSelectDocument={handleSelectDoc} />;
             case 'analytics': return <Analytics />;
             case 'review': return <ReviewMode />;
             case 'assistant': return <Assistant />;
