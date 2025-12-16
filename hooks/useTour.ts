@@ -10,6 +10,7 @@ export const useTour = () => {
         driverObj.current = driver({
             showProgress: true,
             animate: true,
+            overlayOpacity: 0.6,
             steps: [
                 {
                     element: '#nav-dashboard',

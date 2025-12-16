@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom driver.js styling for premium feel */
+.driver-popover {
+    background-color: rgba(30, 41, 59, 0.95); /* Slate-800 equivalent with opacity */
+    color: #f8fafc; /* Slate-50 */
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    backdrop-filter: blur(12px);
+    padding: 20px;
+    max-width: 350px;
+}
+
+.driver-popover-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #fff;
+}
+
+.driver-popover-description {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #cbd5e1; /* Slate-300 */
+    margin-bottom: 20px !important;
+}
+
+.driver-popover-footer {
+    margin-top: 15px;
+}
+
+.driver-popover-footer button {
+    background-color: #f8fafc; /* Slate-50 */
+    color: #0f172a; /* Slate-900 */
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-shadow: none;
+}
+
+.driver-popover-footer button:hover {
+    background-color: #e2e8f0; /* Slate-200 */
+}
+
+.driver-popover-footer button.driver-close-btn {
+    background-color: transparent;
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.driver-popover-footer button.driver-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+/* Arrow styling */
+.driver-popover-arrow {
+    border-color: rgba(30, 41, 59, 0.95);
+}
+
+.driver-popover-arrow-side-left.driver-popover-arrow {
+    border-left-color: rgba(30, 41, 59, 0.95);
+}
+
+.driver-popover-arrow-side-right.driver-popover-arrow {
+    border-right-color: rgba(30, 41, 59, 0.95);
+}
+
+.driver-popover-arrow-side-top.driver-popover-arrow {
+    border-top-color: rgba(30, 41, 59, 0.95);
+}
+
+.driver-popover-arrow-side-bottom.driver-popover-arrow {
+    border-bottom-color: rgba(30, 41, 59, 0.95);
+}
+
+/* Attempt to blur the surroundings */
+/* This depends on driver.js implementation, v1.0 uses SVG overlay */
+.driver-overlay, #driver-page-overlay {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
