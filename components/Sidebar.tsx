@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Workspace, Document } from '../types';
-import { ChevronRight, ChevronDown, Plus, MoreHorizontal, Search, Settings, FileText, Layout, ChevronsUpDown, Home, Trash2, Bell, Brain, GitPullRequest, GraduationCap, Network, TrendingUp, Sparkles, History, Database } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, MoreHorizontal, Search, Settings, FileText, Layout, ChevronsUpDown, Home, Trash2, Bell, Brain, GitPullRequest, GraduationCap, Network, TrendingUp, Sparkles, History, Database, CircleHelp } from 'lucide-react';
 
 interface SidebarProps {
     workspaces: Workspace[];
@@ -11,6 +11,7 @@ interface SidebarProps {
     onNavigate: (view: string) => void;
     onOpenSearch: () => void;
     currentView: string;
+    onStartTour?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -21,7 +22,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     onDeleteDoc,
     onNavigate,
     onOpenSearch,
-    currentView
+    currentView,
+    onStartTour
 }) => {
     const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
         'f1': true,
@@ -68,7 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <span className="text-[10px] text-slate-600 border border-slate-800 rounded px-1.5 py-0.5 bg-slate-900 group-hover:border-slate-600 group-hover:text-slate-400 transition-colors">⌘K</span>
                 </button>
 
-                <button onClick={() => onNavigate('dashboard')} className={navItemClass(currentView === 'dashboard')}>
+                <button id="nav-dashboard" onClick={() => onNavigate('dashboard')} className={navItemClass(currentView === 'dashboard')}>
                     <Home size={16} /> <span>Home</span>
                 </button>
                 <button onClick={() => onNavigate('notifications')} className={navItemClass(currentView === 'notifications') + " justify-between"}>
@@ -80,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </button>
 
                 <SectionHeader title="Think & Plan" />
-                <button onClick={() => onNavigate('thinking')} className={navItemClass(currentView === 'thinking')}>
+                <button id="nav-thinking" onClick={() => onNavigate('thinking')} className={navItemClass(currentView === 'thinking')}>
                     <Brain size={16} /> <span>Thinking Canvas</span>
                 </button>
                 <button onClick={() => onNavigate('decisions')} className={navItemClass(currentView === 'decisions')}>
@@ -94,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <button onClick={() => onNavigate('study')} className={navItemClass(currentView === 'study')}>
                     <GraduationCap size={16} /> <span>Study Mode</span>
                 </button>
-                <button onClick={() => onNavigate('review')} className={navItemClass(currentView === 'review')}>
+                <button id="nav-review" onClick={() => onNavigate('review')} className={navItemClass(currentView === 'review')}>
                     <FileText size={16} /> <span>Reviewer Mode</span>
                 </button>
                 <button onClick={() => onNavigate('analytics')} className={navItemClass(currentView === 'analytics')}>
@@ -111,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <button onClick={() => onNavigate('data')} className={navItemClass(currentView === 'data')}>
                     <Database size={16} /> <span>Data Control</span>
                 </button>
-                <button onClick={() => onNavigate('settings')} className={navItemClass(currentView === 'settings')}>
+                <button id="nav-settings" onClick={() => onNavigate('settings')} className={navItemClass(currentView === 'settings')}>
                     <Settings size={16} /> <span>Settings</span>
                 </button>
                 <button onClick={() => onNavigate('trash')} className={navItemClass(currentView === 'trash')}>
@@ -184,11 +186,21 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="pt-3 border-t border-slate-800 mt-auto">
                 <button
                     onClick={() => onCreateDoc(workspaces[0].folders[0].id)}
+                    id="nav-add-doc"
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-800 hover:border-slate-700"
                 >
                     <Plus size={16} />
                     <span>New Page</span>
                 </button>
+                {onStartTour && (
+                    <button
+                        onClick={onStartTour}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 rounded-lg transition-colors mt-2"
+                    >
+                        <CircleHelp size={16} />
+                        <span>Tutorial</span>
+                    </button>
+                )}
             </div>
         </div>
     );

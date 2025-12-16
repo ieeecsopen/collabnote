@@ -26,6 +26,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import { useDocuments } from './hooks/useDocuments';
 import { getDocumentCollaborators } from './services/profileService';
 import { moveToTrash } from './services/documentService';
+import { useTour } from './hooks/useTour';
 
 type ViewType =
     | 'editor'
@@ -62,6 +63,7 @@ const AppContent: React.FC = () => {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [errorCode, setErrorCode] = useState<404 | 403 | 500>(404);
     const [collaborators, setCollaborators] = useState<User[]>([]);
+    const { startTour, checkAndStartTour } = useTour();
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -134,6 +136,14 @@ const AppContent: React.FC = () => {
         return docs.sort((a, b) => new Date(b.lastEdited).getTime() - new Date(a.lastEdited).getTime());
     }, [workspaces]);
 
+    // Check for onboarding tour when user is loaded
+    useEffect(() => {
+        if (user && !docsLoading) {
+            checkAndStartTour();
+        }
+    }, [user, docsLoading]);
+
+
     // Show loading while checking auth and loading docs
     if (authLoading || (user && docsLoading)) {
         return (
@@ -205,6 +215,7 @@ const AppContent: React.FC = () => {
                 onNavigate={(view) => setCurrentView(view as ViewType)}
                 onOpenSearch={() => setIsSearchOpen(true)}
                 currentView={currentView}
+                onStartTour={startTour}
             />
 
             <main className="flex-1 bg-white rounded-2xl shadow-xl overflow-hidden relative border border-slate-800/50">
