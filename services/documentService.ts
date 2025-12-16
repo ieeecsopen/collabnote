@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Document, Block } from '../types';
+import { logDocumentCreate, logDocumentEdit, logDocumentDelete } from './activityService';
 
 export interface DbDocument {
     id: string;
@@ -90,6 +91,10 @@ export const createDocument = async (title: string = 'Untitled'): Promise<Docume
         .single();
 
     if (error) throw error;
+
+    // Log activity
+    logDocumentCreate(title, data.id);
+
     return toDocument(data);
 };
 
@@ -146,12 +151,22 @@ export const deleteDocument = async (docId: string): Promise<void> => {
 
 // Soft delete - move to trash
 export const moveToTrash = async (docId: string): Promise<void> => {
+    // Get title before deletion for logging
+    const { data: doc } = await supabase
+        .from('documents')
+        .select('title')
+        .eq('id', docId)
+        .single();
+
     const { error } = await supabase
         .from('documents')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', docId);
 
     if (error) throw error;
+
+    // Log activity
+    logDocumentDelete(doc?.title || 'Untitled', docId);
 };
 
 // Restore from trash
