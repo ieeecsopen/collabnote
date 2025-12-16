@@ -1,82 +1,225 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Move, Plus, X, Share2, ZoomIn, ZoomOut, MousePointer2, Loader } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import ReactFlow, {
+    addEdge,
+    MiniMap,
+    Controls,
+    Background,
+    useNodesState,
+    useEdgesState,
+    Connection,
+    Edge,
+    Node,
+    Handle,
+    Position,
+    NodeProps,
+    MarkerType
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import { Plus, Save, Loader, MousePointer2 } from 'lucide-react';
 import {
-    ThinkingNode,
-    fetchThinkingNodes,
+    fetchThinkingData,
     createThinkingNode,
     updateThinkingNode,
-    deleteThinkingNode
+    deleteThinkingNode,
+    createThinkingEdge,
+    deleteThinkingEdge,
+    ThinkingNode,
+    ThinkingEdge
 } from '../services/thinkingService';
 
-const ThinkingCanvas: React.FC = () => {
-    const [nodes, setNodes] = useState<ThinkingNode[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isDragging, setIsDragging] = useState<string | null>(null);
-    const canvasRef = useRef<HTMLDivElement>(null);
+// --- Custom Node Component ---
+const CustomNode = ({ data, id, selected }: NodeProps) => {
+    // Only allow editing if selected or explicitly interacting
+    const [isEditing, setIsEditing] = useState(false);
+    const [text, setText] = useState(data.text);
 
+    // Sync local state if data changes externally
     useEffect(() => {
-        loadNodes();
+        setText(data.text);
+    }, [data.text]);
+
+    const handleBlur = () => {
+        setIsEditing(false);
+        if (text !== data.text && data.onLabelChange) {
+            data.onLabelChange(id, text);
+        }
+    };
+
+    return (
+        <div className={`px-4 py-3 shadow-md rounded-md border-2 ${selected ? 'border-indigo-500' : 'border-transparent'} ${data.color || 'bg-white'} min-w-[150px]`}>
+            {/* Input Handles */}
+            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-slate-400" />
+
+            <div className="flex items-center justify-center">
+                {isEditing ? (
+                    <input
+                        autoFocus
+                        value={text}
+                        onChange={(evt) => setText(evt.target.value)}
+                        onBlur={handleBlur}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleBlur();
+                        }}
+                        className="bg-transparent text-center font-medium text-slate-900 outline-none w-full"
+                    />
+                ) : (
+                    <div
+                        onDoubleClick={() => setIsEditing(true)}
+                        className="font-medium text-slate-900 text-center w-full cursor-text"
+                    >
+                        {text || 'New Node'}
+                    </div>
+                )}
+            </div>
+
+            {/* Output Handles */}
+            <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+            <Handle type="source" position={Position.Right} className="w-3 h-3 bg-slate-400" />
+        </div>
+    );
+};
+
+const nodeTypes = {
+    custom: CustomNode,
+};
+
+const ThinkingCanvas: React.FC = () => {
+    const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Load initial data
+    useEffect(() => {
+        const loadData = async () => {
+            setIsLoading(true);
+            const { nodes: loadedNodes, edges: loadedEdges } = await fetchThinkingData();
+
+            // Transform nodes to ReactFlow format, passing the update callback
+            const rfNodes = loadedNodes.map(n => ({
+                id: n.id,
+                position: n.position,
+                data: {
+                    ...n.data,
+                    onLabelChange: handleNodeLabelChange // Pass callback to custom node
+                },
+                type: 'custom',
+            }));
+
+            // Transform edges
+            const rfEdges = loadedEdges.map(e => ({
+                id: e.id,
+                source: e.source,
+                target: e.target,
+                type: e.type || 'smoothstep',
+                animated: e.animated,
+                label: e.label,
+                markerEnd: { type: MarkerType.ArrowClosed },
+            }));
+
+            setNodes(rfNodes);
+            setEdges(rfEdges);
+            setIsLoading(false);
+        };
+        loadData();
+    }, [setNodes, setEdges]); // Only run once on mount
+
+    // --- Event Handlers ---
+
+    // 1. Connection created
+    const onConnect = useCallback(
+        async (params: Connection) => {
+            if (!params.source || !params.target) return;
+
+            const newEdgeId = `edge-${Date.now()}`;
+            const newEdge: Edge = {
+                ...params,
+                id: newEdgeId,
+                type: 'smoothstep',
+                markerEnd: { type: MarkerType.ArrowClosed }
+            };
+
+            setEdges((eds) => addEdge(newEdge, eds));
+
+            // Persist
+            await createThinkingEdge({
+                id: newEdgeId,
+                source: params.source,
+                target: params.target,
+                type: 'smoothstep'
+            });
+        },
+        [setEdges],
+    );
+
+    // 2. Node Move End (Persist position)
+    const onNodeDragStop = useCallback(async (_: React.MouseEvent, node: Node) => {
+        if (!node.id.startsWith('default-')) { // Don't save default demo nodes unless they are real IDs
+            await updateThinkingNode(node.id, {
+                position: node.position
+            });
+        }
     }, []);
 
-    const loadNodes = async () => {
-        setIsLoading(true);
-        const data = await fetchThinkingNodes();
-        setNodes(data);
-        setIsLoading(false);
-    };
+    // 3. Node Label Change (from CustomNode)
+    const handleNodeLabelChange = async (nodeId: string, newText: string) => {
+        // Update local state is handled by CustomNode calling this, but we need to update global nodes state too?
+        // Actually, CustomNode updates its own display, but we should update the 'nodes' state so it doesn't revert.
+        setNodes((nds) =>
+            nds.map((node) => {
+                if (node.id === nodeId) {
+                    node.data = { ...node.data, text: newText };
+                }
+                return node;
+            })
+        );
 
-    const handleMouseDown = (id: string) => {
-        setIsDragging(id);
-    };
-
-    const handleMouseMove = (e: React.MouseEvent) => {
-        if (isDragging && canvasRef.current) {
-            const rect = canvasRef.current.getBoundingClientRect();
-            const x = e.clientX - rect.left - 64;
-            const y = e.clientY - rect.top - 32;
-            setNodes(prev => prev.map(n => n.id === isDragging ? { ...n, x, y } : n));
+        // Persist
+        if (!nodeId.startsWith('default-')) {
+            await updateThinkingNode(nodeId, {
+                data: { text: newText, color: '' } // Color logic to be improved
+            });
         }
     };
 
-    const handleMouseUp = async () => {
-        if (isDragging) {
-            const node = nodes.find(n => n.id === isDragging);
-            if (node && !node.id.startsWith('default-')) {
-                await updateThinkingNode(node.id, { x: node.x, y: node.y });
+    // 4. Delete Key Handler (ReactFlow handles UI, we need to handle DB)
+    const onNodesDelete = useCallback(async (deleted: Node[]) => {
+        for (const node of deleted) {
+            if (!node.id.startsWith('default-')) {
+                await deleteThinkingNode(node.id);
             }
         }
-        setIsDragging(null);
-    };
+    }, []);
 
+    const onEdgesDelete = useCallback(async (deleted: Edge[]) => {
+        for (const edge of deleted) {
+            await deleteThinkingEdge(edge.id);
+        }
+    }, []);
+
+
+    // --- Toolbar Actions ---
     const addNode = async () => {
-        const newNode = await createThinkingNode({
-            x: Math.random() * 400 + 50,
-            y: Math.random() * 400 + 50,
-            text: 'New Concept',
-            color: 'bg-yellow-100'
-        });
-        if (newNode) {
-            setNodes([...nodes, newNode]);
-        } else {
-            // Fallback for demo
-            setNodes([...nodes, {
-                id: crypto.randomUUID(),
-                x: Math.random() * 400 + 50,
-                y: Math.random() * 400 + 50,
-                text: 'New Concept',
-                color: 'bg-yellow-100'
-            }]);
-        }
-    };
+        const id = crypto.randomUUID();
+        const newNodeData: ThinkingNode = {
+            id,
+            position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 },
+            data: { text: 'New Concept', color: 'bg-yellow-100' },
+            type: 'custom'
+        };
 
-    const removeNode = async (id: string) => {
-        if (!id.startsWith('default-')) {
-            await deleteThinkingNode(id);
-        }
-        setNodes(nodes.filter(n => n.id !== id));
-    };
+        // Optimistic UI update
+        const rfNode: Node = {
+            id: newNodeData.id,
+            position: newNodeData.position,
+            data: { ...newNodeData.data, onLabelChange: handleNodeLabelChange },
+            type: 'custom',
+        };
+        setNodes((nds) => nds.concat(rfNode));
 
-    const colors = ['bg-indigo-100', 'bg-green-100', 'bg-purple-100', 'bg-yellow-100', 'bg-pink-100', 'bg-cyan-100'];
+        // Persist
+        await createThinkingNode(newNodeData);
+    };
 
     if (isLoading) {
         return (
@@ -87,75 +230,38 @@ const ThinkingCanvas: React.FC = () => {
     }
 
     return (
-        <div className="flex-1 h-full flex flex-col bg-slate-50 overflow-hidden relative">
+        <div className="flex-1 h-full flex flex-col bg-slate-50 relative">
             {/* Toolbar */}
             <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 bg-white p-2 rounded-xl shadow-md border border-slate-200">
                 <button onClick={addNode} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600" title="Add Node">
                     <Plus size={20} />
                 </button>
-                <button className="p-2 hover:bg-slate-100 rounded-lg text-indigo-600 bg-indigo-50" title="Select">
-                    <MousePointer2 size={20} />
-                </button>
                 <div className="h-px bg-slate-200 my-1"></div>
-                <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-600" title="Zoom In">
-                    <ZoomIn size={20} />
-                </button>
-                <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-600" title="Zoom Out">
-                    <ZoomOut size={20} />
-                </button>
+                <div className="p-2 text-xs text-slate-400 text-center font-mono">
+                    Double-click node to edit text.<br />
+                    Backspace to delete.
+                </div>
             </div>
 
-            <div className="absolute top-4 right-4 z-10 bg-white px-4 py-2 rounded-xl shadow-md border border-slate-200 text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                {nodes.length} nodes
-            </div>
-
-            {/* Canvas */}
-            <div
-                ref={canvasRef}
-                className="flex-1 overflow-hidden cursor-crosshair relative bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px]"
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-            >
-                <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                    {/* Draw connections between first node and others */}
-                    {nodes.length > 1 && nodes.slice(1).map(node => (
-                        <line
-                            key={`line-${node.id}`}
-                            x1={nodes[0].x + 64} y1={nodes[0].y + 32}
-                            x2={node.x + 64} y2={node.y + 32}
-                            stroke="#cbd5e1" strokeWidth="2"
-                        />
-                    ))}
-                </svg>
-
-                {nodes.map(node => (
-                    <div
-                        key={node.id}
-                        onMouseDown={() => handleMouseDown(node.id)}
-                        style={{ transform: `translate(${node.x}px, ${node.y}px)` }}
-                        className={`absolute w-32 h-16 ${node.color} border border-slate-200/50 shadow-lg rounded-xl flex items-center justify-center p-2 cursor-move hover:ring-2 hover:ring-indigo-400 hover:shadow-xl transition-shadow select-none group`}
-                    >
-                        <input
-                            type="text"
-                            value={node.text}
-                            onChange={(e) => setNodes(nodes.map(n => n.id === node.id ? { ...n, text: e.target.value } : n))}
-                            onBlur={() => {
-                                if (!node.id.startsWith('default-')) {
-                                    updateThinkingNode(node.id, { text: node.text });
-                                }
-                            }}
-                            className="text-sm font-medium text-slate-800 text-center leading-tight bg-transparent w-full outline-none"
-                        />
-                        <div
-                            className="absolute -top-2 -right-2 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all"
-                            onClick={(e) => { e.stopPropagation(); removeNode(node.id); }}
-                        >
-                            <X size={10} />
-                        </div>
-                    </div>
-                ))}
+            <div className="flex-1 w-full h-full">
+                <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    onNodeDragStop={onNodeDragStop}
+                    onNodesDelete={onNodesDelete}
+                    onEdgesDelete={onEdgesDelete}
+                    nodeTypes={nodeTypes}
+                    fitView
+                    attributionPosition="bottom-right"
+                    className="bg-slate-50"
+                >
+                    <Controls />
+                    <MiniMap />
+                    <Background gap={12} size={1} />
+                </ReactFlow>
             </div>
         </div>
     );
