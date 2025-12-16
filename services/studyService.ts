@@ -71,12 +71,12 @@ export const createFlashcard = async (
 };
 
 // Mark flashcard as reviewed
-export const markFlashcardReviewed = async (id: string): Promise<void> => {
+export const markFlashcardReviewed = async (id: string, currentCount: number): Promise<void> => {
     await supabase
         .from('flashcards')
         .update({
             last_reviewed: new Date().toISOString(),
-            review_count: supabase.rpc('increment_review_count', { row_id: id })
+            review_count: currentCount + 1
         })
         .eq('id', id);
 };
