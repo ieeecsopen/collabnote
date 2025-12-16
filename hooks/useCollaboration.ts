@@ -4,7 +4,7 @@ import { WebsocketProvider } from 'y-websocket';
 import { Block, BlockType, User } from '../types';
 
 // Default WebSocket URL - can be overridden via environment
-const WS_URL = import.meta.env.VITE_COLLABORATION_WS_URL || 'ws://localhost:3001/collaboration';
+const WS_URL = import.meta.env.VITE_COLLABORATION_WS_URL || 'ws://localhost:3000/collaboration';
 
 export interface CollaboratorCursor {
     id: string;
