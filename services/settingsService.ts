@@ -7,6 +7,7 @@ export interface UserSettings {
     weekly_digest: boolean;
     language: string;
     timezone: string;
+    has_seen_onboarding: boolean;
 }
 
 const defaultSettings: UserSettings = {
@@ -16,6 +17,7 @@ const defaultSettings: UserSettings = {
     weekly_digest: false,
     language: 'en',
     timezone: 'UTC',
+    has_seen_onboarding: false,
 };
 
 // Get user settings
@@ -42,6 +44,7 @@ export const getSettings = async (): Promise<UserSettings> => {
         weekly_digest: data.weekly_digest ?? false,
         language: data.language || 'en',
         timezone: data.timezone || 'UTC',
+        has_seen_onboarding: data.has_seen_onboarding ?? false,
     };
 };
 
