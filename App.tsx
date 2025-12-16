@@ -168,7 +168,7 @@ const AppContent: React.FC = () => {
             case 'study': return <StudyMode />;
             case 'knowledge-map': return <KnowledgeMap onSelectDocument={handleSelectDoc} />;
             case 'analytics': return <Analytics />;
-            case 'review': return <ReviewMode />;
+            case 'review': return <ReviewMode documentId={activeDocId || undefined} onSelectDocument={handleSelectDoc} />;
             case 'assistant': return <Assistant />;
             case 'timeline': return <Timeline onSelectDocument={handleSelectDoc} />;
             case 'data': return <DataControl />;
