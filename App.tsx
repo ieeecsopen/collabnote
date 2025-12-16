@@ -104,7 +104,7 @@ const AppContent: React.FC = () => {
     }, [updateDoc]);
 
     const handleCreateDocument = useCallback(async (folderId?: string, initialBlocks?: Block[], initialTitle?: string) => {
-        const newDoc = await createDoc(folderId, initialTitle);
+        const newDoc = await createDoc(folderId, initialTitle, initialBlocks);
         if (newDoc) {
             setActiveDocId(newDoc.id);
             setCurrentView('editor');

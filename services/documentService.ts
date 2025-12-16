@@ -73,9 +73,11 @@ export const fetchSharedDocuments = async (): Promise<Document[]> => {
 };
 
 // Create a new document
-export const createDocument = async (title: string = 'Untitled'): Promise<Document> => {
+export const createDocument = async (title: string = 'Untitled', initialBlocks?: Block[]): Promise<Document> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
+
+    const defaultBlocks = [{ id: crypto.randomUUID(), type: 'heading-1', content: '' }];
 
     const { data, error } = await supabase
         .from('documents')
@@ -83,7 +85,7 @@ export const createDocument = async (title: string = 'Untitled'): Promise<Docume
             owner_id: user.id,
             title,
             content: {
-                blocks: [{ id: crypto.randomUUID(), type: 'heading-1', content: '' }],
+                blocks: initialBlocks || defaultBlocks,
                 icon: '📄'
             }
         })

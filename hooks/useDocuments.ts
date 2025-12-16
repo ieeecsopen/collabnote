@@ -11,7 +11,7 @@ interface UseDocumentsReturn {
     workspaces: Workspace[];
     isLoading: boolean;
     error: string | null;
-    createDocument: (folderId?: string, title?: string) => Promise<Document | null>;
+    createDocument: (folderId?: string, title?: string, initialBlocks?: any[]) => Promise<Document | null>;
     updateDocument: (doc: Document) => Promise<void>;
     deleteDocument: (docId: string) => Promise<void>;
     refreshDocuments: () => Promise<void>;
@@ -62,9 +62,9 @@ export const useDocuments = (): UseDocumentsReturn => {
         loadDocuments();
     }, [loadDocuments]);
 
-    const createDocument = useCallback(async (folderId?: string, title?: string): Promise<Document | null> => {
+    const createDocument = useCallback(async (folderId?: string, title?: string, initialBlocks?: any[]): Promise<Document | null> => {
         try {
-            const newDoc = await createDoc(title || 'Untitled');
+            const newDoc = await createDoc(title || 'Untitled', initialBlocks);
             // Add to local state
             setWorkspaces(prev => prev.map(ws => ({
                 ...ws,
