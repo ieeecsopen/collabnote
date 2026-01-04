@@ -4,6 +4,7 @@ import BlockComponent from './BlockComponent';
 import History from './History';
 import ShareModal from './ShareModal';
 import PageHeader from './PageHeader';
+import { PresenceBar, LiveCursorsContainer } from './PresenceComponents';
 import { generateAIContent, suggestTitle } from '../services/geminiService';
 import { Sparkles, Loader, Share2, Clock, MoreHorizontal, MessageSquare, Star, Wifi, WifiOff } from 'lucide-react';
 import TextToolbar from './TextToolbar';
@@ -196,30 +197,12 @@ const Editor: React.FC<EditorProps> = ({ document, updateDocument, users }) => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Online Users */}
-                    <div className="flex items-center -space-x-2 mr-3 px-2">
-                        {allUsers.slice(0, 5).map((user) => (
-                            <div key={user.id} className="relative group">
-                                <img
-                                    src={user.avatar}
-                                    alt={user.name}
-                                    className={`w-7 h-7 rounded-full border-2 border-white ring-1 ${user.isActive ? 'ring-green-400' : 'ring-slate-100'
-                                        }`}
-                                />
-                                {user.isActive && (
-                                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
-                                )}
-                                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                    {user.name} {user.isActive && '(online)'}
-                                </div>
-                            </div>
-                        ))}
-                        {allUsers.length > 5 && (
-                            <div className="w-7 h-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-medium text-slate-600">
-                                +{allUsers.length - 5}
-                            </div>
-                        )}
-                    </div>
+                    {/* Presence Bar - Online Users */}
+                    <PresenceBar
+                        currentUser={currentUser}
+                        collaborators={onlineUsers}
+                        maxVisible={5}
+                    />
 
                     <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
