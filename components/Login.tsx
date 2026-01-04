@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowRight, Lock, Mail, ChevronLeft, User as UserIcon, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Lock, Mail, ChevronLeft, User as UserIcon, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { User } from '../types';
-import { supabase } from '../services/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { useDialog } from '../contexts/DialogContext';
 
 interface LoginProps {
@@ -9,6 +9,26 @@ interface LoginProps {
 }
 
 type AuthView = 'login' | 'register' | 'forgot-password';
+
+interface PasswordStrength {
+    score: number;
+    label: string;
+    color: string;
+}
+
+const getPasswordStrength = (password: string): PasswordStrength => {
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[a-z]/.test(password)) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+    if (score <= 2) return { score, label: 'Weak', color: 'bg-red-500' };
+    if (score <= 4) return { score, label: 'Medium', color: 'bg-yellow-500' };
+    return { score, label: 'Strong', color: 'bg-green-500' };
+};
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const [view, setView] = useState<AuthView>('login');
@@ -19,9 +39,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    // We can use showSuccess too, but user asked for "confirm the user... and must go again to the sign in option"
-    // So a dedicated success view is better than just a toast.
+    const { login, register } = useAuth();
     const { showSuccess, showError } = useDialog();
 
     const resetForm = () => {
@@ -43,60 +64,34 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         try {
             if (view === 'forgot-password') {
-                const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
-                if (resetError) throw resetError;
-                showSuccess('Password reset link sent! Check your email.');
+                // TODO: Implement forgot password with email service
+                showSuccess('If an account exists with this email, you will receive a password reset link.');
                 handleViewChange('login');
             } else if (view === 'register') {
                 // Validation
                 if (password !== confirmPassword) {
                     throw new Error("Passwords do not match");
                 }
-                if (password.length < 6) {
-                    throw new Error("Password must be at least 6 characters");
+                if (password.length < 8) {
+                    throw new Error("Password must be at least 8 characters");
+                }
+                if (!/[A-Z]/.test(password)) {
+                    throw new Error("Password must contain at least one uppercase letter");
+                }
+                if (!/[a-z]/.test(password)) {
+                    throw new Error("Password must contain at least one lowercase letter");
+                }
+                if (!/[0-9]/.test(password)) {
+                    throw new Error("Password must contain at least one number");
                 }
 
-                // Sign Up
-                const { data, error: signUpError } = await supabase.auth.signUp({
-                    email,
-                    password,
-                    options: {
-                        data: {
-                            full_name: name,
-                        }
-                    }
-                });
-
-                if (signUpError) throw signUpError;
-
-                // Force logout if session was created, to ensure they login manually as requested
-                if (data.session) {
-                    await supabase.auth.signOut();
-                }
-
-                // Explicitly show success screen regardless of session
-                // User requirement: "must go again to the sign in option rather than going straight away to the dashboard"
+                // Register user
+                await register(email, password, name);
                 setRegistrationSuccess(true);
             } else {
                 // Log In
-                const { data, error: signInError } = await supabase.auth.signInWithPassword({
-                    email,
-                    password,
-                });
-
-                if (signInError) throw signInError;
-
-                if (data.user) {
-                    const displayName = data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'User';
-                    const user: User = {
-                        id: data.user.id,
-                        name: displayName,
-                        avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${data.user.id}`,
-                        color: 'blue',
-                        isActive: true
-                    };
-                    onLogin(user);
-                }
+                await login(email, password);
+                // onLogin will be triggered by auth state change
             }
         } catch (err: any) {
             console.error('Auth Error:', err);
@@ -107,6 +102,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             setIsLoading(false);
         }
     };
+
+    const passwordStrength = getPasswordStrength(password);
 
     return (
         <div className="flex min-h-screen w-full bg-white">
@@ -160,7 +157,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             </div>
                             <h3 className="text-xl font-bold text-slate-900 mb-2">Account Created!</h3>
                             <p className="text-slate-600 mb-6">
-                                Your account has been successfully registered. Please inspect your email inbox to verify your account before logging in.
+                                Your account has been successfully created. You can now sign in with your credentials.
                             </p>
                             <button
                                 onClick={() => handleViewChange('login')}
@@ -183,6 +180,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                             : 'We will send you a reset link.'}
                                 </p>
                             </div>
+
+                            {error && (
+                                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                                    {error}
+                                </div>
+                            )}
 
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 {view === 'register' && (
@@ -234,14 +237,37 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                         <div className="relative">
                                             <Lock className="absolute left-3 top-3 text-slate-400" size={18} />
                                             <input
-                                                type="password"
+                                                type={showPassword ? 'text' : 'password'}
                                                 required
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
                                                 placeholder="••••••••"
-                                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all text-sm text-slate-900 placeholder:text-slate-400"
+                                                className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all text-sm text-slate-900 placeholder:text-slate-400"
                                             />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                                            >
+                                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
                                         </div>
+                                        {view === 'register' && password && (
+                                            <div className="mt-2">
+                                                <div className="flex gap-1 mb-1">
+                                                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                                                        <div
+                                                            key={i}
+                                                            className={`h-1 flex-1 rounded-full ${i <= passwordStrength.score ? passwordStrength.color : 'bg-slate-200'
+                                                                }`}
+                                                        />
+                                                    ))}
+                                                </div>
+                                                <p className="text-xs text-slate-500">
+                                                    Password strength: <span className={passwordStrength.score <= 2 ? 'text-red-500' : passwordStrength.score <= 4 ? 'text-yellow-600' : 'text-green-600'}>{passwordStrength.label}</span>
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -251,20 +277,39 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                         <div className="relative">
                                             <Lock className="absolute left-3 top-3 text-slate-400" size={18} />
                                             <input
-                                                type="password"
+                                                type={showConfirmPassword ? 'text' : 'password'}
                                                 required
                                                 value={confirmPassword}
                                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                                 placeholder="••••••••"
-                                                className={`w-full pl-10 pr-4 py-2.5 bg-white border rounded-lg focus:outline-none focus:ring-2 transition-all text-sm text-slate-900 placeholder:text-slate-400 ${confirmPassword && password !== confirmPassword
+                                                className={`w-full pl-10 pr-10 py-2.5 bg-white border rounded-lg focus:outline-none focus:ring-2 transition-all text-sm text-slate-900 placeholder:text-slate-400 ${confirmPassword && password !== confirmPassword
                                                     ? 'border-red-300 focus:ring-red-100 focus:border-red-400'
                                                     : 'border-slate-200 focus:ring-slate-900/10 focus:border-slate-900'
                                                     }`}
                                             />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                                            >
+                                                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
                                         </div>
                                         {confirmPassword && password !== confirmPassword && (
                                             <p className="text-xs text-red-500">Passwords do not match</p>
                                         )}
+                                    </div>
+                                )}
+
+                                {view === 'register' && (
+                                    <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600">
+                                        <p className="font-medium mb-1">Password requirements:</p>
+                                        <ul className="space-y-0.5 list-disc list-inside">
+                                            <li className={password.length >= 8 ? 'text-green-600' : ''}>At least 8 characters</li>
+                                            <li className={/[A-Z]/.test(password) ? 'text-green-600' : ''}>One uppercase letter</li>
+                                            <li className={/[a-z]/.test(password) ? 'text-green-600' : ''}>One lowercase letter</li>
+                                            <li className={/[0-9]/.test(password) ? 'text-green-600' : ''}>One number</li>
+                                        </ul>
                                     </div>
                                 )}
 

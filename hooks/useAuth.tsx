@@ -1,14 +1,15 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User as SupabaseUser, Session } from '@supabase/supabase-js';
-import { supabase } from '../services/supabase';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
+import * as authService from '../services/authService';
 
 interface AuthContextType {
     user: User | null;
-    supabaseUser: SupabaseUser | null;
-    session: Session | null;
     isLoading: boolean;
+    isAuthenticated: boolean;
+    login: (email: string, password: string) => Promise<void>;
+    register: (email: string, password: string, name?: string) => Promise<void>;
     signOut: () => Promise<void>;
+    signOutAll: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,69 +28,88 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children, onAuthChange }) => {
-    const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
-    const [session, setSession] = useState<Session | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Convert Supabase user to app User
-    const toAppUser = (su: SupabaseUser): User => ({
-        id: su.id,
-        name: su.user_metadata?.full_name || su.email?.split('@')[0] || 'User',
-        avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${su.id}`,
+    // Convert API user to app User type
+    const toAppUser = (apiUser: { id: string; email: string; name: string; avatar_url: string | null }): User => ({
+        id: apiUser.id,
+        name: apiUser.name || apiUser.email.split('@')[0] || 'User',
+        avatar: apiUser.avatar_url || `https://api.dicebear.com/7.x/notionists/svg?seed=${apiUser.id}`,
         color: 'blue',
         isActive: true,
     });
 
+    // Check for existing session on mount
     useEffect(() => {
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            if (session?.user) {
-                setSupabaseUser(session.user);
-                const appUser = toAppUser(session.user);
-                setUser(appUser);
-                onAuthChange?.(appUser);
-            }
-            setIsLoading(false);
-        });
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (event, session) => {
-                console.log('Auth state changed:', event);
-                setSession(session);
-
-                if (session?.user) {
-                    setSupabaseUser(session.user);
-                    const appUser = toAppUser(session.user);
+        const checkSession = async () => {
+            try {
+                const authData = await authService.checkAuth();
+                if (authData) {
+                    const appUser = toAppUser(authData.user);
                     setUser(appUser);
                     onAuthChange?.(appUser);
-                } else {
-                    setSupabaseUser(null);
-                    setUser(null);
-                    onAuthChange?.(null);
                 }
-
+            } catch (error) {
+                console.error('Session check error:', error);
+            } finally {
                 setIsLoading(false);
             }
-        );
-
-        return () => {
-            subscription.unsubscribe();
         };
+
+        checkSession();
     }, [onAuthChange]);
 
-    const signOut = async () => {
-        await supabase.auth.signOut();
+    // Set up token refresh interval
+    useEffect(() => {
+        if (!user) return;
+
+        // Refresh token every 10 minutes (before 15-minute expiry)
+        const refreshInterval = setInterval(async () => {
+            const success = await authService.refreshTokens();
+            if (!success) {
+                setUser(null);
+                onAuthChange?.(null);
+            }
+        }, 10 * 60 * 1000);
+
+        return () => clearInterval(refreshInterval);
+    }, [user, onAuthChange]);
+
+    const login = useCallback(async (email: string, password: string) => {
+        const authData = await authService.login(email, password);
+        const appUser = toAppUser(authData.user);
+        setUser(appUser);
+        onAuthChange?.(appUser);
+    }, [onAuthChange]);
+
+    const register = useCallback(async (email: string, password: string, name?: string) => {
+        await authService.register(email, password, name);
+        // Don't log in automatically - user requirement
+    }, []);
+
+    const signOut = useCallback(async () => {
+        await authService.logout();
         setUser(null);
-        setSupabaseUser(null);
-        setSession(null);
         onAuthChange?.(null);
-    };
+    }, [onAuthChange]);
+
+    const signOutAll = useCallback(async () => {
+        await authService.logoutAll();
+        setUser(null);
+        onAuthChange?.(null);
+    }, [onAuthChange]);
 
     return (
-        <AuthContext.Provider value={{ user, supabaseUser, session, isLoading, signOut }}>
+        <AuthContext.Provider value={{
+            user,
+            isLoading,
+            isAuthenticated: !!user,
+            login,
+            register,
+            signOut,
+            signOutAll
+        }}>
             {children}
         </AuthContext.Provider>
     );
