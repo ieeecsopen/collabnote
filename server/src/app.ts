@@ -8,6 +8,7 @@ import workspacesRoutes from './routes/workspaces';
 import commentsRoutes from './routes/comments';
 import searchRoutes from './routes/search';
 import notificationsRoutes from './routes/notifications';
+import historyRoutes from './routes/history';
 import { authenticateUser } from './middleware/auth';
 import { authRateLimiter, apiRateLimiter } from './middleware/rateLimiter';
 
@@ -43,5 +44,6 @@ app.use('/api/workspaces', authenticateUser, workspacesRoutes);
 app.use('/api/comments', authenticateUser, commentsRoutes);
 app.use('/api/search', authenticateUser, searchRoutes);
 app.use('/api/notifications', authenticateUser, notificationsRoutes);
+app.use('/api/history', authenticateUser, historyRoutes);
 
 export default app;
