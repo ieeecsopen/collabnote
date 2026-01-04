@@ -260,7 +260,7 @@ router.post('/:id/replies', async (req: AuthRequest, res: Response) => {
                 content: content.trim(),
                 author_id: req.user.id,
                 author_name: req.user.name || 'Anonymous',
-                author_avatar: req.user.avatar || null
+                author_avatar: req.user.avatar_url || null
             })
             .select()
             .single();
