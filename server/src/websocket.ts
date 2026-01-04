@@ -1,29 +1,25 @@
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 // @ts-ignore
-import { setupWSConnection } from 'y-websocket/bin/utils';
+import { setupWSConnection, docs } from 'y-websocket/bin/utils';
 import http from 'http';
 import * as Y from 'yjs';
-import { supabase } from './config/database';
+import { supabaseAdmin } from './config/database';
 
 const wss = new WebSocketServer({ noServer: true });
 
-// Basic in-memory debounce map
+// Debounce map for auto-save
 const debouncers = new Map<string, NodeJS.Timeout>();
 
-const saveDocument = async (docName: string, content: Uint8Array) => {
-    // docName is expected to be the UUID of the document
-    console.log(`Saving document ${docName} to Supabase...`);
+// Track connected clients per document
+const documentClients = new Map<string, Set<WebSocket>>();
 
-    // We store the Yjs update blob as JSONB (decoded) or Base64 string if using a text field.
-    // However, our schema has `content jsonb`. storing binary blob in jsonb is not efficient directly.
-    // Ideally we convert to JSON using Yjs toJSON or store as base64 string in a text field.
-    // Given the schema `content jsonb`, let's assume we want to store the JSON representation of the doc 
-    // so it's readable/queryable, OR change schema to bytea.
-    // For now, let's convert the update to a Base64 string to store inside a JSON object wrapper.
+// Save document to database
+const saveDocument = async (docName: string, content: Uint8Array) => {
+    console.log(`[Yjs] Saving document ${docName} to Supabase...`);
 
     const base64Update = Buffer.from(content).toString('base64');
 
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
         .from('documents')
         .update({
             content: { yjs_update: base64Update },
@@ -32,15 +28,73 @@ const saveDocument = async (docName: string, content: Uint8Array) => {
         .eq('id', docName);
 
     if (error) {
-        console.error('Error saving document:', error);
+        console.error('[Yjs] Error saving document:', error);
     } else {
-        console.log(`Document ${docName} saved.`);
+        console.log(`[Yjs] Document ${docName} saved successfully.`);
     }
-}
+};
 
+// Load document from database
+const loadDocument = async (docName: string): Promise<Uint8Array | null> => {
+    console.log(`[Yjs] Loading document ${docName} from Supabase...`);
+
+    const { data, error } = await supabaseAdmin
+        .from('documents')
+        .select('content')
+        .eq('id', docName)
+        .single();
+
+    if (error) {
+        console.error('[Yjs] Error loading document:', error);
+        return null;
+    }
+
+    if (data?.content?.yjs_update) {
+        const update = Buffer.from(data.content.yjs_update, 'base64');
+        console.log(`[Yjs] Document ${docName} loaded (${update.length} bytes)`);
+        return update;
+    }
+
+    return null;
+};
+
+// Create snapshot for a document
+export const createSnapshot = async (docName: string): Promise<boolean> => {
+    try {
+        const ydoc = docs.get(docName);
+        if (!ydoc) {
+            console.log(`[Yjs] Document ${docName} not in memory, loading from DB...`);
+            return false;
+        }
+
+        const fullState = Y.encodeStateAsUpdate(ydoc);
+        await saveDocument(docName, fullState);
+        return true;
+    } catch (error) {
+        console.error('[Yjs] Snapshot error:', error);
+        return false;
+    }
+};
+
+// Get document stats
+export const getDocumentStats = (docName: string) => {
+    const ydoc = docs.get(docName);
+    const clients = documentClients.get(docName);
+
+    return {
+        docName,
+        inMemory: !!ydoc,
+        clientCount: clients?.size || 0,
+        lastUpdated: new Date().toISOString()
+    };
+};
+
+// Setup WebSocket server
 export const setupWebSocket = (server: http.Server) => {
     server.on('upgrade', (request, socket, head) => {
-        if (request.url?.startsWith('/collaboration')) {
+        const url = request.url || '';
+
+        if (url.startsWith('/collaboration')) {
             wss.handleUpgrade(request, socket, head, (ws) => {
                 wss.emit('connection', ws, request);
             });
@@ -49,72 +103,85 @@ export const setupWebSocket = (server: http.Server) => {
         }
     });
 
-    wss.on('connection', (ws, req) => {
-        const docName = req.url?.split('/').pop() || 'default';
+    wss.on('connection', async (ws: WebSocket, req: http.IncomingMessage) => {
+        const url = req.url || '';
+        const docName = url.split('/').pop() || 'default';
 
-        // This setupWSConnection from y-websocket handles the Yjs sync protocol.
-        // To add persistence, we need to interact with the underlying Y.Doc.
-        // y-websocket/bin/utils exposes `docs` Map.
+        console.log(`[Yjs] Client connected to document: ${docName}`);
 
-        // However, accessing the internal `docs` map is internal API usage.
-        // A cleaner way usually involves providing a `persistence` instance to `setupWSConnection` 
-        // IF we were taking over the whole setup.
+        // Track client
+        if (!documentClients.has(docName)) {
+            documentClients.set(docName, new Set());
+        }
+        documentClients.get(docName)!.add(ws);
 
-        // Since we are hacking it a bit:
-        // Let's rely on the module's behavior. We can try to attach a listener to the doc if we can get reference.
-        // The `setupWSConnection` creates the doc if it doesn't exist.
-
+        // Setup Yjs WebSocket connection
         setupWSConnection(ws, req, { docName });
 
-        // Post-connection hack: Try to retrieve the doc from the library's cache and attach listener
-        // We need to import `docs` from utils if possible, or use a custom "Persistence" implementation
-        // that y-websocket accepts.
+        // Get the Yjs document
+        const ydoc = docs.get(docName);
 
-        // Alternative: Use the "bindState" approach if we control the doc creation.
-        // y-websocket allows request-based doc resolution if we use `setPersistence`.
-        // Let's assume for this step we will implement a basic "on change" listener 
-        // but getting the doc reference is the hard part without full custom implementation.
+        if (ydoc && !ydoc._persistenceAttached) {
+            // Load existing content from database
+            const existingUpdate = await loadDocument(docName);
+            if (existingUpdate) {
+                Y.applyUpdate(ydoc, existingUpdate);
+            }
 
-        // SIMPLIFICATION:
-        // We will just create a "mock" persistence layer that sets a hook.
-        // Actually, let's rewrite `setupWebSocket` to implement `y-websocket` logic manually? 
-        // No, that's too complex (200+ lines).
+            // Attach update listener for auto-save
+            ydoc.on('update', (update: Uint8Array) => {
+                // Clear existing debouncer
+                if (debouncers.has(docName)) {
+                    clearTimeout(debouncers.get(docName)!);
+                }
 
-        // Let's use the `getYDoc` utility if available or just leave persistence as "In Memory" 
-        // with a TODO note, as implementing robust Yjs persistence on a custom backend 
-        // is non-trivial without using the `y-leveldb` or similar standard adapters.
-        // BUT the user asked for "real backend".
+                // Debounced save (30 seconds of inactivity)
+                debouncers.set(docName, setTimeout(() => {
+                    const fullState = Y.encodeStateAsUpdate(ydoc);
+                    saveDocument(docName, fullState);
+                    debouncers.delete(docName);
+                }, 30000));
+            });
 
-        // Let's try to access the doc via the singleton map (require a little hack).
-        // @ts-ignore
-        const { docs } = require('y-websocket/bin/utils');
-        if (docs.has(docName)) {
-            const ydoc = docs.get(docName);
+            ydoc._persistenceAttached = true;
+        }
 
-            // If listeners not attached, attach them
-            if (!ydoc._persistenceAttached) {
-                ydoc.on('update', (update: Uint8Array) => {
-                    // Debounce save
-                    if (debouncers.has(docName)) clearTimeout(debouncers.get(docName)!);
+        // Handle client disconnect
+        ws.on('close', () => {
+            console.log(`[Yjs] Client disconnected from document: ${docName}`);
 
-                    debouncers.set(docName, setTimeout(() => {
+            const clients = documentClients.get(docName);
+            if (clients) {
+                clients.delete(ws);
+
+                // If no more clients, save immediately and cleanup
+                if (clients.size === 0) {
+                    console.log(`[Yjs] No more clients for ${docName}, saving and cleaning up...`);
+
+                    // Clear any pending debounced save
+                    if (debouncers.has(docName)) {
+                        clearTimeout(debouncers.get(docName)!);
+                        debouncers.delete(docName);
+                    }
+
+                    // Save immediately
+                    const ydoc = docs.get(docName);
+                    if (ydoc) {
                         const fullState = Y.encodeStateAsUpdate(ydoc);
                         saveDocument(docName, fullState);
-                    }, 2000)); // Save every 2 seconds of inactivity
-                });
-                ydoc._persistenceAttached = true;
-
-                // Load info (Initial Load)
-                // In a real app we would load from DB and applyUpdate(ydoc, dbContent) here immediately.
-                // We'll add a simple loader stub.
-                (async () => {
-                    const { data } = await supabase.from('documents').select('content').eq('id', docName).single();
-                    if (data?.content?.yjs_update) {
-                        const update = Buffer.from(data.content.yjs_update, 'base64');
-                        Y.applyUpdate(ydoc, update);
                     }
-                })();
+
+                    documentClients.delete(docName);
+                }
             }
-        }
+        });
+
+        ws.on('error', (error) => {
+            console.error(`[Yjs] WebSocket error for ${docName}:`, error);
+        });
     });
+
+    console.log('[Yjs] WebSocket server initialized');
 };
+
+export default { setupWebSocket, createSnapshot, getDocumentStats };

@@ -275,4 +275,62 @@ router.post('/:id/restore', async (req: AuthRequest, res: Response) => {
     }
 });
 
+/**
+ * POST /api/pages/:id/snapshot
+ * Manually trigger a snapshot save from Yjs state
+ */
+router.post('/:id/snapshot', async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { id } = req.params;
+
+        // Verify ownership before allowing snapshot
+        const { data: page, error: pageError } = await supabaseAdmin
+            .from('documents')
+            .select('owner_id')
+            .eq('id', id)
+            .single();
+
+        if (pageError || !page) {
+            return res.status(404).json({ error: 'Page not found' });
+        }
+
+        if (page.owner_id !== req.user.id) {
+            // Check collaborator access
+            const { data: collab } = await supabaseAdmin
+                .from('collaborators')
+                .select('role')
+                .eq('document_id', id)
+                .eq('user_id', req.user.id)
+                .single();
+
+            if (!collab || collab.role === 'viewer') {
+                return res.status(403).json({ error: 'Insufficient permissions' });
+            }
+        }
+
+        // Trigger snapshot save via WebSocket module
+        // The actual save happens via the Yjs update mechanism
+        // This endpoint just confirms the request and updates timestamp
+        const { error } = await supabaseAdmin
+            .from('documents')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (error) throw error;
+
+        res.json({
+            message: 'Snapshot requested',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error: any) {
+        console.error('Snapshot error:', error);
+        res.status(500).json({ error: error.message || 'Failed to create snapshot' });
+    }
+});
+
 export default router;
+

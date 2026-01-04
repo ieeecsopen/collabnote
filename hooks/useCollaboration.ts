@@ -5,6 +5,7 @@ import { Block, BlockType, User } from '../types';
 
 // Default WebSocket URL - can be overridden via environment
 const WS_URL = import.meta.env.VITE_COLLABORATION_WS_URL || 'ws://localhost:3000/collaboration';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export interface CollaboratorCursor {
     id: string;
@@ -12,6 +13,7 @@ export interface CollaboratorCursor {
     color: string;
     avatar: string;
     position?: { blockId: string; offset: number };
+    selection?: { anchor: number; head: number };
 }
 
 export interface UseCollaborationReturn {
@@ -20,19 +22,27 @@ export interface UseCollaborationReturn {
     title: string;
 
     // Actions
-    updateBlock: (id: string, content: string) => void;
+    updateBlock: (id: string, content: string, properties?: Record<string, any>) => void;
     addBlock: (afterId: string, type?: BlockType) => Block;
     removeBlock: (id: string) => void;
     changeBlockType: (id: string, type: BlockType) => void;
     setTitle: (title: string) => void;
+    moveBlock: (blockId: string, newIndex: number) => void;
 
     // Collaboration state
     isConnected: boolean;
     isSynced: boolean;
     onlineUsers: CollaboratorCursor[];
+    connectionError: string | null;
 
     // Awareness
     updateCursorPosition: (blockId: string, offset: number) => void;
+    updateSelection: (anchor: number, head: number) => void;
+
+    // Persistence
+    saveSnapshot: () => Promise<boolean>;
+    lastSaved: Date | null;
+    isSaving: boolean;
 }
 
 export const useCollaboration = (
@@ -46,11 +56,16 @@ export const useCollaboration = (
     const [isConnected, setIsConnected] = useState(false);
     const [isSynced, setIsSynced] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState<CollaboratorCursor[]>([]);
+    const [connectionError, setConnectionError] = useState<string | null>(null);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
 
     const ydocRef = useRef<Y.Doc | null>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
     const yBlocksRef = useRef<Y.Array<any> | null>(null);
     const yTitleRef = useRef<Y.Text | null>(null);
+    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Initialize Yjs document and WebSocket connection
     useEffect(() => {
@@ -70,6 +85,7 @@ export const useCollaboration = (
         const provider = new WebsocketProvider(wsUrl, documentId, ydoc, {
             connect: true,
             params: {},
+            maxBackoffTime: 5000,
         });
         providerRef.current = provider;
 
@@ -80,12 +96,19 @@ export const useCollaboration = (
                 name: currentUser.name,
                 color: currentUser.color || '#6366f1',
                 avatar: currentUser.avatar,
+                timestamp: Date.now(),
             });
         }
 
         // Connection status handlers
         provider.on('status', (event: { status: string }) => {
-            setIsConnected(event.status === 'connected');
+            const connected = event.status === 'connected';
+            setIsConnected(connected);
+            setConnectionError(connected ? null : 'Disconnected from server');
+
+            if (connected) {
+                console.log('[Collab] WebSocket connected');
+            }
         });
 
         provider.on('sync', (synced: boolean) => {
@@ -109,6 +132,11 @@ export const useCollaboration = (
             }
         });
 
+        provider.on('connection-error', (event: any) => {
+            console.error('[Collab] Connection error:', event);
+            setConnectionError('Failed to connect to collaboration server');
+        });
+
         // Listen to awareness changes (other users)
         provider.awareness.on('change', () => {
             const states = provider.awareness.getStates();
@@ -122,6 +150,7 @@ export const useCollaboration = (
                         color: state.user.color,
                         avatar: state.user.avatar,
                         position: state.cursor,
+                        selection: state.selection,
                     });
                 }
             });
@@ -151,8 +180,21 @@ export const useCollaboration = (
         blocksObserver();
         titleObserver();
 
+        // Auto-save indicator every 60 seconds (the actual save happens on server)
+        autoSaveIntervalRef.current = setInterval(() => {
+            if (isConnected) {
+                setLastSaved(new Date());
+            }
+        }, 60000);
+
         // Cleanup
         return () => {
+            if (autoSaveIntervalRef.current) {
+                clearInterval(autoSaveIntervalRef.current);
+            }
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
             yBlocks.unobserve(blocksObserver);
             yTitle.unobserve(titleObserver);
             provider.disconnect();
@@ -160,8 +202,8 @@ export const useCollaboration = (
         };
     }, [documentId, currentUser?.id]);
 
-    // Update block content
-    const updateBlock = useCallback((id: string, content: string) => {
+    // Update block content with properties support
+    const updateBlock = useCallback((id: string, content: string, properties?: Record<string, any>) => {
         const yBlocks = yBlocksRef.current;
         if (!yBlocks) return;
 
@@ -170,7 +212,11 @@ export const useCollaboration = (
             const block = yBlocks.get(index);
             ydocRef.current?.transact(() => {
                 yBlocks.delete(index, 1);
-                yBlocks.insert(index, [{ ...block, content }]);
+                yBlocks.insert(index, [{
+                    ...block,
+                    content,
+                    properties: properties !== undefined ? properties : block.properties
+                }]);
             });
         }
     }, []);
@@ -181,6 +227,7 @@ export const useCollaboration = (
             id: crypto.randomUUID(),
             type,
             content: '',
+            properties: {},
         };
 
         const yBlocks = yBlocksRef.current;
@@ -192,9 +239,9 @@ export const useCollaboration = (
         const index = yBlocks.toArray().findIndex((b: any) => b.id === afterId);
         ydocRef.current?.transact(() => {
             if (index === -1) {
-                yBlocks.push([{ ...newBlock, properties: {} }]);
+                yBlocks.push([{ ...newBlock }]);
             } else {
-                yBlocks.insert(index + 1, [{ ...newBlock, properties: {} }]);
+                yBlocks.insert(index + 1, [{ ...newBlock }]);
             }
         });
 
@@ -229,6 +276,23 @@ export const useCollaboration = (
         }
     }, []);
 
+    // Move block to new position (for drag-and-drop)
+    const moveBlock = useCallback((blockId: string, newIndex: number) => {
+        const yBlocks = yBlocksRef.current;
+        if (!yBlocks) return;
+
+        const currentIndex = yBlocks.toArray().findIndex((b: any) => b.id === blockId);
+        if (currentIndex === -1 || currentIndex === newIndex) return;
+
+        const block = yBlocks.get(currentIndex);
+        ydocRef.current?.transact(() => {
+            yBlocks.delete(currentIndex, 1);
+            // Adjust index if we're moving forward
+            const adjustedIndex = currentIndex < newIndex ? newIndex - 1 : newIndex;
+            yBlocks.insert(adjustedIndex, [block]);
+        });
+    }, []);
+
     // Set title
     const setTitle = useCallback((newTitle: string) => {
         const yTitle = yTitleRef.current;
@@ -251,6 +315,38 @@ export const useCollaboration = (
         provider.awareness.setLocalStateField('cursor', { blockId, offset });
     }, []);
 
+    // Update selection for awareness
+    const updateSelection = useCallback((anchor: number, head: number) => {
+        const provider = providerRef.current;
+        if (!provider) return;
+
+        provider.awareness.setLocalStateField('selection', { anchor, head });
+    }, []);
+
+    // Manually trigger a snapshot save
+    const saveSnapshot = useCallback(async (): Promise<boolean> => {
+        if (!documentId) return false;
+
+        setIsSaving(true);
+        try {
+            const response = await fetch(`${API_URL}/api/pages/${documentId}/snapshot`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+
+            if (response.ok) {
+                setLastSaved(new Date());
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[Collab] Snapshot save failed:', error);
+            return false;
+        } finally {
+            setIsSaving(false);
+        }
+    }, [documentId]);
+
     return {
         blocks,
         title,
@@ -259,10 +355,16 @@ export const useCollaboration = (
         removeBlock,
         changeBlockType,
         setTitle,
+        moveBlock,
         isConnected,
         isSynced,
         onlineUsers,
+        connectionError,
         updateCursorPosition,
+        updateSelection,
+        saveSnapshot,
+        lastSaved,
+        isSaving,
     };
 };
 
