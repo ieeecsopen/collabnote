@@ -1,12 +1,33 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Block, BlockType } from '../types';
-import { GripVertical, Type, List, ListOrdered, Quote, Code, Minus, MessageSquarePlus, Wand2, Loader } from 'lucide-react';
+import {
+  GripVertical,
+  Type,
+  List,
+  ListOrdered,
+  Quote,
+  Code,
+  Minus,
+  MessageSquarePlus,
+  Wand2,
+  Loader,
+  Check,
+  Square,
+  AlertCircle,
+  ChevronRight,
+  ChevronDown,
+  Image as ImageIcon,
+  Table,
+  Trash2,
+  Plus
+} from 'lucide-react';
 import { generateAIContent } from '../services/geminiService';
+import SlashCommandMenu from './SlashCommandMenu';
 
 interface BlockComponentProps {
   block: Block;
   isFocused: boolean;
-  updateBlock: (id: string, content: string) => void;
+  updateBlock: (id: string, content: string, properties?: Record<string, any>) => void;
   addBlock: (afterId: string, type?: BlockType) => void;
   removeBlock: (id: string) => void;
   focusBlock: (id: string, offset?: number) => void;
@@ -34,6 +55,9 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   const [showMenu, setShowMenu] = useState(false);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [isFormatting, setIsFormatting] = useState(false);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashQuery, setSlashQuery] = useState('');
+  const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     if (isFocused && contentRef.current) {
@@ -48,19 +72,54 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
   }, [isFocused]);
 
   useEffect(() => {
-      if (contentRef.current && contentRef.current.innerHTML !== block.content) {
-          if (document.activeElement !== contentRef.current) {
-              contentRef.current.innerHTML = block.content;
-          }
+    if (contentRef.current && contentRef.current.innerHTML !== block.content) {
+      if (document.activeElement !== contentRef.current) {
+        contentRef.current.innerHTML = block.content;
       }
+    }
   }, [block.content]);
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
-      const newContent = e.currentTarget.innerHTML;
-      updateBlock(block.id, newContent);
+    const newContent = e.currentTarget.innerHTML;
+    const textContent = e.currentTarget.textContent || '';
+
+    // Check for slash command
+    if (textContent.startsWith('/') && !showSlashMenu) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setSlashPosition({ top: rect.bottom + 4, left: rect.left });
+      setShowSlashMenu(true);
+      setSlashQuery(textContent.slice(1));
+    } else if (textContent.startsWith('/') && showSlashMenu) {
+      setSlashQuery(textContent.slice(1));
+    } else if (!textContent.startsWith('/') && showSlashMenu) {
+      setShowSlashMenu(false);
+      setSlashQuery('');
+    }
+
+    updateBlock(block.id, newContent);
+  };
+
+  const handleSlashSelect = (type: BlockType) => {
+    setShowSlashMenu(false);
+    setSlashQuery('');
+    // Clear the slash command text
+    if (contentRef.current) {
+      contentRef.current.innerHTML = '';
+    }
+    updateBlock(block.id, '');
+    changeBlockType(block.id, type);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Don't handle if slash menu is open
+    if (showSlashMenu) {
+      if (e.key === 'Escape') {
+        setShowSlashMenu(false);
+        setSlashQuery('');
+      }
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       onEnter(block.id);
@@ -68,18 +127,25 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       e.preventDefault();
       removeBlock(block.id);
     } else if (e.key === 'ArrowUp') {
-        const selection = window.getSelection();
-        if (selection && selection.anchorOffset === 0 && selection.isCollapsed) {
-             e.preventDefault();
-             onArrowUp(block.id);
-        }
+      const selection = window.getSelection();
+      if (selection && selection.anchorOffset === 0 && selection.isCollapsed) {
+        e.preventDefault();
+        onArrowUp(block.id);
+      }
     } else if (e.key === 'ArrowDown') {
-        const selection = window.getSelection();
-        const textLength = contentRef.current?.textContent?.length || 0;
-        if (selection && selection.anchorOffset >= textLength && selection.isCollapsed) {
-            e.preventDefault();
-            onArrowDown(block.id);
-        }
+      const selection = window.getSelection();
+      const textLength = contentRef.current?.textContent?.length || 0;
+      if (selection && selection.anchorOffset >= textLength && selection.isCollapsed) {
+        e.preventDefault();
+        onArrowDown(block.id);
+      }
+    } else if (e.key === 'Tab' && block.type === 'toggle') {
+      e.preventDefault();
+      // Toggle the expanded state
+      updateBlock(block.id, block.content, {
+        ...block.properties,
+        expanded: !block.properties?.expanded
+      });
     }
   };
 
@@ -90,6 +156,9 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       case 'heading-3': return 'Heading 3';
       case 'code': return 'Type code...';
       case 'quote': return 'Empty quote';
+      case 'todo': return 'To-do';
+      case 'callout': return 'Type something...';
+      case 'toggle': return 'Toggle header';
       default: return "Type '/' for commands";
     }
   };
@@ -102,137 +171,89 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
       case 'bullet-list': return 'list-disc ml-4';
       case 'number-list': return 'list-decimal ml-4';
       case 'quote': return 'border-l-4 border-slate-300 pl-4 py-1 italic text-slate-600';
-      case 'code': return 'font-mono text-sm bg-slate-100 p-3 rounded-md text-slate-800 border border-slate-200';
+      case 'code': return 'font-mono text-sm bg-slate-900 text-green-400 p-4 rounded-lg';
       case 'divider': return 'border-b border-slate-200 my-4 h-0';
+      case 'todo': return 'text-base text-slate-700 min-h-[1.5em] leading-7';
+      case 'callout': return 'text-base text-slate-700 leading-7';
+      case 'toggle': return 'text-base text-slate-700 min-h-[1.5em] leading-7 font-medium';
       default: return 'text-base text-slate-700 min-h-[1.5em] leading-7';
     }
   };
 
   const TypeIcon = () => {
-      switch(block.type) {
-          case 'heading-1': return <Type size={14} className="font-bold" />;
-          case 'heading-2': return <Type size={14} />;
-          case 'bullet-list': return <List size={14} />;
-          case 'number-list': return <ListOrdered size={14} />;
-          case 'code': return <Code size={14} />;
-          case 'quote': return <Quote size={14} />;
-          case 'divider': return <Minus size={14} />;
-          default: return <Type size={14} className="opacity-50" />;
-      }
-  }
+    switch (block.type) {
+      case 'heading-1': return <Type size={14} className="font-bold" />;
+      case 'heading-2': return <Type size={14} />;
+      case 'bullet-list': return <List size={14} />;
+      case 'number-list': return <ListOrdered size={14} />;
+      case 'code': return <Code size={14} />;
+      case 'quote': return <Quote size={14} />;
+      case 'divider': return <Minus size={14} />;
+      case 'todo': return <Check size={14} />;
+      case 'callout': return <AlertCircle size={14} />;
+      case 'toggle': return <ChevronRight size={14} />;
+      case 'image': return <ImageIcon size={14} />;
+      case 'table': return <Table size={14} />;
+      default: return <Type size={14} className="opacity-50" />;
+    }
+  };
 
+  // Divider block
   if (block.type === 'divider') {
     return (
-      <div 
+      <div
         className="group relative flex items-center -ml-8 pl-8 py-1"
         onMouseEnter={() => setShowMenu(true)}
         onMouseLeave={() => setShowMenu(false)}
         onClick={() => focusBlock(block.id)}
       >
-         <div className={`absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-1 transition-opacity duration-200 ${showMenu || isFocused ? 'opacity-100' : 'opacity-0'}`}>
-            <button className="p-1 hover:bg-slate-100 rounded text-slate-400 cursor-grab active:cursor-grabbing">
-                <GripVertical size={16} />
-            </button>
-            <button className="p-1 hover:bg-slate-100 rounded text-slate-400" onClick={() => removeBlock(block.id)}>
-                <Minus size={16} />
-            </button>
+        <div className={`absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-1 transition-opacity duration-200 ${showMenu || isFocused ? 'opacity-100' : 'opacity-0'}`}>
+          <button className="p-1 hover:bg-slate-100 rounded text-slate-400 cursor-grab active:cursor-grabbing">
+            <GripVertical size={16} />
+          </button>
+          <button className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-500" onClick={() => removeBlock(block.id)}>
+            <Trash2 size={14} />
+          </button>
         </div>
         <hr className="w-full border-slate-200" />
       </div>
-    )
+    );
   }
 
-  return (
-    <div 
-      className="group relative flex items-start -ml-12 pl-12 py-1 transition-colors"
-      onMouseEnter={() => setShowMenu(true)}
-      onMouseLeave={() => setShowMenu(false)}
-    >
-      {/* Block Handle / Menu */}
-      <div className={`absolute left-0 top-1.5 flex items-center gap-0.5 transition-opacity duration-200 ${showMenu || isFocused || aiMenuOpen ? 'opacity-100' : 'opacity-0'}`}>
-        <button 
-            className="p-1 hover:bg-slate-100 rounded-md text-slate-400 cursor-grab active:cursor-grabbing transition-colors"
-            title="Drag to move"
-        >
-            <GripVertical size={18} />
-        </button>
-        
-        {/* Type Switcher Quick Menu */}
-        <div className="relative group/menu">
-             <button className="p-1 hover:bg-slate-100 rounded-md text-slate-500 transition-colors">
-                <TypeIcon />
-            </button>
-            <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-slate-200 shadow-lg rounded-md z-50 hidden group-hover/menu:block p-1 animate-in fade-in zoom-in-95 duration-100">
-                <div className="text-[10px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">Turn into</div>
-                {[
-                    { id: 'paragraph', label: 'Text', icon: Type },
-                    { id: 'heading-1', label: 'Heading 1', icon: Type },
-                    { id: 'heading-2', label: 'Heading 2', icon: Type },
-                    { id: 'bullet-list', label: 'Bulleted List', icon: List },
-                    { id: 'number-list', label: 'Numbered List', icon: ListOrdered },
-                    { id: 'code', label: 'Code Block', icon: Code },
-                    { id: 'quote', label: 'Quote', icon: Quote },
-                ].map((type) => (
-                    <button 
-                        key={type.id}
-                        onClick={() => changeBlockType(block.id, type.id as BlockType)}
-                        className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-slate-100 transition-colors ${block.type === type.id ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-700'}`}
-                    >
-                        <type.icon size={14} />
-                        {type.label}
-                    </button>
-                ))}
-            </div>
-        </div>
+  // Todo block
+  if (block.type === 'todo') {
+    const isChecked = block.properties?.checked || false;
+    return (
+      <div
+        className="group relative flex items-start -ml-12 pl-12 py-1 transition-colors"
+        onMouseEnter={() => setShowMenu(true)}
+        onMouseLeave={() => setShowMenu(false)}
+      >
+        <BlockHandle
+          showMenu={showMenu}
+          isFocused={isFocused}
+          aiMenuOpen={aiMenuOpen}
+          block={block}
+          changeBlockType={changeBlockType}
+          setAiMenuOpen={setAiMenuOpen}
+          showAI={showAI}
+          isFormatting={isFormatting}
+          setIsFormatting={setIsFormatting}
+          updateBlock={updateBlock}
+          TypeIcon={TypeIcon}
+        />
 
-        {/* AI Menu */}
-        <div className="relative">
-            <button 
-                onClick={(e) => { e.stopPropagation(); setAiMenuOpen(!aiMenuOpen); }}
-                className={`p-1 hover:bg-purple-50 rounded-md text-purple-500 transition-colors ${aiMenuOpen ? 'bg-purple-50' : ''}`}
-                title="AI Options"
-            >
-                    <MessageSquarePlus size={16} />
-            </button>
-            {aiMenuOpen && (
-                <>
-                    <div className="fixed inset-0 z-40" onClick={() => setAiMenuOpen(false)}></div>
-                    <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-slate-200 shadow-lg rounded-md z-50 p-1 animate-in fade-in zoom-in-95 duration-200">
-                        <button
-                            onClick={() => { setAiMenuOpen(false); showAI(block.id); }}
-                            className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-slate-100 text-slate-700 transition-colors"
-                        >
-                            <MessageSquarePlus size={14} className="text-purple-500" />
-                            <span>Ask Gemini...</span>
-                        </button>
-                        <button
-                            onClick={async () => {
-                                if (block.content.trim().length === 0) return;
-                                setIsFormatting(true);
-                                const formatted = await generateAIContent('', block.content, 'format');
-                                updateBlock(block.id, formatted);
-                                setIsFormatting(false);
-                                setAiMenuOpen(false);
-                            }}
-                            disabled={isFormatting}
-                            className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-slate-100 text-slate-700 disabled:opacity-50 transition-colors"
-                        >
-                            {isFormatting ? <Loader size={14} className="animate-spin" /> : <Wand2 size={14} className="text-blue-500" />}
-                            <span>Smart Format</span>
-                        </button>
-                    </div>
-                </>
-            )}
-        </div>
-      </div>
-
-      {/* Editor Content */}
-      <div className={`flex-1 relative ${block.type === 'bullet-list' || block.type === 'number-list' ? 'flex gap-2' : ''}`}>
-        
-        {block.type === 'bullet-list' && <span className="text-slate-900 font-bold select-none leading-7">•</span>}
-        {block.type === 'number-list' && <span className="text-slate-900 font-medium select-none leading-7">1.</span>}
-
-        <div
+        <div className="flex-1 flex items-start gap-2">
+          <button
+            onClick={() => updateBlock(block.id, block.content, { ...block.properties, checked: !isChecked })}
+            className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${isChecked
+                ? 'bg-indigo-500 border-indigo-500 text-white'
+                : 'border-slate-300 hover:border-indigo-400'
+              }`}
+          >
+            {isChecked && <Check size={12} strokeWidth={3} />}
+          </button>
+          <div
             ref={contentRef}
             contentEditable
             suppressContentEditableWarning
@@ -240,13 +261,352 @@ const BlockComponent: React.FC<BlockComponentProps> = ({
             onKeyDown={handleKeyDown}
             onClick={() => focusBlock(block.id)}
             data-placeholder={getPlaceholder()}
-            className={`w-full outline-none placeholder-empty ${getStyles()}`}
+            className={`flex-1 outline-none placeholder-empty ${getStyles()} ${isChecked ? 'line-through text-slate-400' : ''}`}
             spellCheck={false}
             dangerouslySetInnerHTML={{ __html: block.content }}
+          />
+        </div>
+
+        {showSlashMenu && (
+          <SlashCommandMenu
+            query={slashQuery}
+            position={slashPosition}
+            onSelect={handleSlashSelect}
+            onClose={() => setShowSlashMenu(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Callout block
+  if (block.type === 'callout') {
+    const calloutType = block.properties?.calloutType || 'info';
+    const calloutStyles = {
+      info: 'bg-blue-50 border-blue-200 text-blue-800',
+      warning: 'bg-amber-50 border-amber-200 text-amber-800',
+      success: 'bg-green-50 border-green-200 text-green-800',
+      error: 'bg-red-50 border-red-200 text-red-800',
+    };
+    const calloutIcons = {
+      info: '💡',
+      warning: '⚠️',
+      success: '✅',
+      error: '❌',
+    };
+
+    return (
+      <div
+        className="group relative flex items-start -ml-12 pl-12 py-1 transition-colors"
+        onMouseEnter={() => setShowMenu(true)}
+        onMouseLeave={() => setShowMenu(false)}
+      >
+        <BlockHandle
+          showMenu={showMenu}
+          isFocused={isFocused}
+          aiMenuOpen={aiMenuOpen}
+          block={block}
+          changeBlockType={changeBlockType}
+          setAiMenuOpen={setAiMenuOpen}
+          showAI={showAI}
+          isFormatting={isFormatting}
+          setIsFormatting={setIsFormatting}
+          updateBlock={updateBlock}
+          TypeIcon={TypeIcon}
+        />
+
+        <div className={`flex-1 flex items-start gap-3 p-4 rounded-lg border ${calloutStyles[calloutType as keyof typeof calloutStyles]}`}>
+          <span className="text-xl">{calloutIcons[calloutType as keyof typeof calloutIcons]}</span>
+          <div
+            ref={contentRef}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            onClick={() => focusBlock(block.id)}
+            data-placeholder={getPlaceholder()}
+            className={`flex-1 outline-none placeholder-empty ${getStyles()}`}
+            spellCheck={false}
+            dangerouslySetInnerHTML={{ __html: block.content }}
+          />
+        </div>
+
+        {showSlashMenu && (
+          <SlashCommandMenu
+            query={slashQuery}
+            position={slashPosition}
+            onSelect={handleSlashSelect}
+            onClose={() => setShowSlashMenu(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Toggle block
+  if (block.type === 'toggle') {
+    const isExpanded = block.properties?.expanded || false;
+    return (
+      <div
+        className="group relative -ml-12 pl-12 py-1 transition-colors"
+        onMouseEnter={() => setShowMenu(true)}
+        onMouseLeave={() => setShowMenu(false)}
+      >
+        <BlockHandle
+          showMenu={showMenu}
+          isFocused={isFocused}
+          aiMenuOpen={aiMenuOpen}
+          block={block}
+          changeBlockType={changeBlockType}
+          setAiMenuOpen={setAiMenuOpen}
+          showAI={showAI}
+          isFormatting={isFormatting}
+          setIsFormatting={setIsFormatting}
+          updateBlock={updateBlock}
+          TypeIcon={TypeIcon}
+        />
+
+        <div className="flex-1">
+          <div className="flex items-start gap-1">
+            <button
+              onClick={() => updateBlock(block.id, block.content, { ...block.properties, expanded: !isExpanded })}
+              className="mt-1 p-0.5 hover:bg-slate-100 rounded transition-colors"
+            >
+              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
+            <div
+              ref={contentRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              onClick={() => focusBlock(block.id)}
+              data-placeholder={getPlaceholder()}
+              className={`flex-1 outline-none placeholder-empty ${getStyles()}`}
+              spellCheck={false}
+              dangerouslySetInnerHTML={{ __html: block.content }}
+            />
+          </div>
+          {isExpanded && (
+            <div className="ml-6 mt-2 pl-4 border-l-2 border-slate-200">
+              <div className="text-sm text-slate-500 italic">Toggle content here...</div>
+            </div>
+          )}
+        </div>
+
+        {showSlashMenu && (
+          <SlashCommandMenu
+            query={slashQuery}
+            position={slashPosition}
+            onSelect={handleSlashSelect}
+            onClose={() => setShowSlashMenu(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Image block
+  if (block.type === 'image') {
+    const imageUrl = block.properties?.url;
+    return (
+      <div
+        className="group relative -ml-12 pl-12 py-2 transition-colors"
+        onMouseEnter={() => setShowMenu(true)}
+        onMouseLeave={() => setShowMenu(false)}
+      >
+        <BlockHandle
+          showMenu={showMenu}
+          isFocused={isFocused}
+          aiMenuOpen={aiMenuOpen}
+          block={block}
+          changeBlockType={changeBlockType}
+          setAiMenuOpen={setAiMenuOpen}
+          showAI={showAI}
+          isFormatting={isFormatting}
+          setIsFormatting={setIsFormatting}
+          updateBlock={updateBlock}
+          TypeIcon={TypeIcon}
+        />
+
+        {imageUrl ? (
+          <img src={imageUrl} alt="" className="max-w-full rounded-lg" />
+        ) : (
+          <div
+            className="flex items-center gap-3 p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors"
+            onClick={() => {
+              const url = prompt('Enter image URL:');
+              if (url) {
+                updateBlock(block.id, block.content, { ...block.properties, url });
+              }
+            }}
+          >
+            <ImageIcon size={24} className="text-slate-400" />
+            <span className="text-slate-500">Click to add image</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Default block rendering
+  return (
+    <div
+      className="group relative flex items-start -ml-12 pl-12 py-1 transition-colors"
+      onMouseEnter={() => setShowMenu(true)}
+      onMouseLeave={() => setShowMenu(false)}
+    >
+      <BlockHandle
+        showMenu={showMenu}
+        isFocused={isFocused}
+        aiMenuOpen={aiMenuOpen}
+        block={block}
+        changeBlockType={changeBlockType}
+        setAiMenuOpen={setAiMenuOpen}
+        showAI={showAI}
+        isFormatting={isFormatting}
+        setIsFormatting={setIsFormatting}
+        updateBlock={updateBlock}
+        TypeIcon={TypeIcon}
+      />
+
+      <div className={`flex-1 relative ${block.type === 'bullet-list' || block.type === 'number-list' ? 'flex gap-2' : ''}`}>
+        {block.type === 'bullet-list' && <span className="text-slate-900 font-bold select-none leading-7">•</span>}
+        {block.type === 'number-list' && <span className="text-slate-900 font-medium select-none leading-7">1.</span>}
+
+        <div
+          ref={contentRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+          onClick={() => focusBlock(block.id)}
+          data-placeholder={getPlaceholder()}
+          className={`w-full outline-none placeholder-empty ${getStyles()}`}
+          spellCheck={false}
+          dangerouslySetInnerHTML={{ __html: block.content }}
         />
       </div>
+
+      {showSlashMenu && (
+        <SlashCommandMenu
+          query={slashQuery}
+          position={slashPosition}
+          onSelect={handleSlashSelect}
+          onClose={() => setShowSlashMenu(false)}
+        />
+      )}
     </div>
   );
 };
+
+// Block Handle component (extracted for reusability)
+interface BlockHandleProps {
+  showMenu: boolean;
+  isFocused: boolean;
+  aiMenuOpen: boolean;
+  block: Block;
+  changeBlockType: (id: string, type: BlockType) => void;
+  setAiMenuOpen: (open: boolean) => void;
+  showAI: (blockId: string) => void;
+  isFormatting: boolean;
+  setIsFormatting: (formatting: boolean) => void;
+  updateBlock: (id: string, content: string, properties?: Record<string, any>) => void;
+  TypeIcon: () => JSX.Element;
+}
+
+const BlockHandle: React.FC<BlockHandleProps> = ({
+  showMenu,
+  isFocused,
+  aiMenuOpen,
+  block,
+  changeBlockType,
+  setAiMenuOpen,
+  showAI,
+  isFormatting,
+  setIsFormatting,
+  updateBlock,
+  TypeIcon
+}) => (
+  <div className={`absolute left-0 top-1.5 flex items-center gap-0.5 transition-opacity duration-200 ${showMenu || isFocused || aiMenuOpen ? 'opacity-100' : 'opacity-0'}`}>
+    <button
+      className="p-1 hover:bg-slate-100 rounded-md text-slate-400 cursor-grab active:cursor-grabbing transition-colors"
+      title="Drag to move"
+    >
+      <GripVertical size={18} />
+    </button>
+
+    {/* Type Switcher */}
+    <div className="relative group/menu">
+      <button className="p-1 hover:bg-slate-100 rounded-md text-slate-500 transition-colors">
+        <TypeIcon />
+      </button>
+      <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-slate-200 shadow-lg rounded-md z-50 hidden group-hover/menu:block p-1 animate-in fade-in zoom-in-95 duration-100">
+        <div className="text-[10px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">Turn into</div>
+        {[
+          { id: 'paragraph', label: 'Text', icon: Type },
+          { id: 'heading-1', label: 'Heading 1', icon: Type },
+          { id: 'heading-2', label: 'Heading 2', icon: Type },
+          { id: 'bullet-list', label: 'Bulleted List', icon: List },
+          { id: 'number-list', label: 'Numbered List', icon: ListOrdered },
+          { id: 'todo', label: 'To-do', icon: Check },
+          { id: 'code', label: 'Code Block', icon: Code },
+          { id: 'quote', label: 'Quote', icon: Quote },
+          { id: 'callout', label: 'Callout', icon: AlertCircle },
+          { id: 'toggle', label: 'Toggle', icon: ChevronRight },
+        ].map((type) => (
+          <button
+            key={type.id}
+            onClick={() => changeBlockType(block.id, type.id as BlockType)}
+            className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-slate-100 transition-colors ${block.type === type.id ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-700'}`}
+          >
+            <type.icon size={14} />
+            {type.label}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* AI Menu */}
+    <div className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); setAiMenuOpen(!aiMenuOpen); }}
+        className={`p-1 hover:bg-purple-50 rounded-md text-purple-500 transition-colors ${aiMenuOpen ? 'bg-purple-50' : ''}`}
+        title="AI Options"
+      >
+        <MessageSquarePlus size={16} />
+      </button>
+      {aiMenuOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setAiMenuOpen(false)}></div>
+          <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-slate-200 shadow-lg rounded-md z-50 p-1 animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => { setAiMenuOpen(false); showAI(block.id); }}
+              className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-slate-100 text-slate-700 transition-colors"
+            >
+              <MessageSquarePlus size={14} className="text-purple-500" />
+              <span>Ask Gemini...</span>
+            </button>
+            <button
+              onClick={async () => {
+                if (block.content.trim().length === 0) return;
+                setIsFormatting(true);
+                const formatted = await generateAIContent('', block.content, 'format');
+                updateBlock(block.id, formatted);
+                setIsFormatting(false);
+                setAiMenuOpen(false);
+              }}
+              disabled={isFormatting}
+              className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-slate-100 text-slate-700 disabled:opacity-50 transition-colors"
+            >
+              {isFormatting ? <Loader size={14} className="animate-spin" /> : <Wand2 size={14} className="text-blue-500" />}
+              <span>Smart Format</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+);
 
 export default BlockComponent;
