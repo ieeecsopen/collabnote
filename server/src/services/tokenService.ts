@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { supabase } from '../config/database';
+import { supabaseAdmin } from '../config/database';
 
 // Configuration
 const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'your-access-secret-key-change-in-production';
@@ -81,7 +81,7 @@ export const storeRefreshToken = async (
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
 
-    const { error } = await supabase.from('refresh_tokens').insert({
+    const { error } = await supabaseAdmin.from('refresh_tokens').insert({
         user_id: userId,
         token_hash: tokenHash,
         expires_at: expiresAt.toISOString(),
@@ -96,7 +96,7 @@ export const storeRefreshToken = async (
 export const validateStoredRefreshToken = async (userId: string, token: string): Promise<boolean> => {
     const tokenHash = hashToken(token);
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('refresh_tokens')
         .select('*')
         .eq('user_id', userId)
@@ -112,7 +112,7 @@ export const validateStoredRefreshToken = async (userId: string, token: string):
 export const revokeRefreshToken = async (userId: string, token: string): Promise<boolean> => {
     const tokenHash = hashToken(token);
 
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
         .from('refresh_tokens')
         .update({ revoked: true })
         .eq('user_id', userId)
@@ -123,7 +123,7 @@ export const revokeRefreshToken = async (userId: string, token: string): Promise
 
 // Revoke all refresh tokens for user
 export const revokeAllUserTokens = async (userId: string): Promise<boolean> => {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
         .from('refresh_tokens')
         .update({ revoked: true })
         .eq('user_id', userId);
@@ -140,7 +140,7 @@ export const createUser = async (
     const passwordHash = await hashPassword(password);
     const avatarUrl = `https://api.dicebear.com/7.x/notionists/svg?seed=${email}`;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('users')
         .insert({
             email: email.toLowerCase(),
@@ -161,7 +161,7 @@ export const createUser = async (
 
 // Find user by email
 export const findUserByEmail = async (email: string): Promise<User | null> => {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('users')
         .select('*')
         .eq('email', email.toLowerCase())
@@ -173,7 +173,7 @@ export const findUserByEmail = async (email: string): Promise<User | null> => {
 
 // Find user by ID
 export const findUserById = async (id: string): Promise<User | null> => {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('users')
         .select('*')
         .eq('id', id)
@@ -192,12 +192,12 @@ export const updateFailedAttempts = async (userId: string, attempts: number, loc
         updateData.locked_until = null;
     }
 
-    await supabase.from('users').update(updateData).eq('id', userId);
+    await supabaseAdmin.from('users').update(updateData).eq('id', userId);
 };
 
 // Reset failed login attempts
 export const resetFailedAttempts = async (userId: string): Promise<void> => {
-    await supabase.from('users').update({
+    await supabaseAdmin.from('users').update({
         failed_login_attempts: 0,
         locked_until: null
     }).eq('id', userId);

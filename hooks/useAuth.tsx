@@ -40,24 +40,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, onAuthChan
         isActive: true,
     });
 
-    // Check for existing session on mount
+    // BYPASS AUTH: Set mock user immediately
+    // TODO: Remove this bypass when auth is fully configured
     useEffect(() => {
-        const checkSession = async () => {
-            try {
-                const authData = await authService.checkAuth();
-                if (authData) {
-                    const appUser = toAppUser(authData.user);
-                    setUser(appUser);
-                    onAuthChange?.(appUser);
-                }
-            } catch (error) {
-                console.error('Session check error:', error);
-            } finally {
-                setIsLoading(false);
-            }
+        const mockUser: User = {
+            id: 'bypass-user-001',
+            name: 'Dev User',
+            avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=bypass-user',
+            color: 'blue',
+            isActive: true,
         };
-
-        checkSession();
+        setUser(mockUser);
+        onAuthChange?.(mockUser);
+        setIsLoading(false);
     }, [onAuthChange]);
 
     // Set up token refresh interval

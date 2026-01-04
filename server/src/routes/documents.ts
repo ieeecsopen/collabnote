@@ -10,6 +10,9 @@ router.use(authenticateUser);
 // List all documents for the authenticated user
 router.get('/', async (req: AuthRequest, res: Response) => {
     try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
         const userId = req.user.id;
         // Query documents where user is owner OR is a collaborator
         // This logic can be simplified if RLS is enabled and we trust Supabase client,
@@ -41,6 +44,9 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 // Create a new document
 router.post('/', async (req: AuthRequest, res: Response) => {
     try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
         const userId = req.user.id;
         const { title } = req.body;
 
@@ -85,6 +91,9 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
         const userId = req.user.id;
 
         const { error } = await supabase

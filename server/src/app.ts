@@ -3,6 +3,9 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import documentRoutes from './routes/documents';
 import authRoutes from './routes/auth';
+import pagesRoutes from './routes/pages';
+import workspacesRoutes from './routes/workspaces';
+import { authenticateUser } from './middleware/auth';
 import { authRateLimiter, apiRateLimiter } from './middleware/rateLimiter';
 
 const app: Application = express();
@@ -31,6 +34,8 @@ app.get('/api/health', (req: Request, res: Response) => {
 app.use('/api/auth', authRateLimiter, authRoutes);
 
 // Protected routes
-app.use('/api/documents', documentRoutes);
+app.use('/api/documents', authenticateUser, documentRoutes);
+app.use('/api/pages', authenticateUser, pagesRoutes);
+app.use('/api/workspaces', authenticateUser, workspacesRoutes);
 
 export default app;

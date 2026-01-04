@@ -3,6 +3,7 @@ import { Block, BlockType, Document, User } from '../types';
 import BlockComponent from './BlockComponent';
 import History from './History';
 import ShareModal from './ShareModal';
+import PageHeader from './PageHeader';
 import { generateAIContent, suggestTitle } from '../services/geminiService';
 import { Sparkles, Loader, Share2, Clock, MoreHorizontal, MessageSquare, Star, Wifi, WifiOff } from 'lucide-react';
 import TextToolbar from './TextToolbar';
@@ -46,11 +47,18 @@ const Editor: React.FC<EditorProps> = ({ document, updateDocument, users }) => {
     const [activeAIBlockId, setActiveAIBlockId] = useState<string | null>(null);
     const aiInputRef = useRef<HTMLInputElement>(null);
 
+    // Autosave state
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
     // Persist changes to parent (for non-collab scenarios and metadata updates)
     useEffect(() => {
         const timer = setTimeout(() => {
             if (blocks.length > 0) {
+                setIsSaving(true);
                 updateDocument({ ...document, title, blocks });
+                setIsSaving(false);
+                setLastSaved(new Date());
             }
         }, 2000); // Debounce longer since Yjs handles real-time
         return () => clearTimeout(timer);
@@ -162,21 +170,25 @@ const Editor: React.FC<EditorProps> = ({ document, updateDocument, users }) => {
         <div className="flex flex-col h-full bg-white relative overflow-hidden">
             <TextToolbar />
 
-            {/* Header - Styled like a toolbar inside the card */}
-            <header className="flex-none bg-white border-b border-slate-100 z-30 px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-slate-50 rounded-md text-slate-400">
-                        <DocumentIcon />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Draft</span>
-                        <span className="text-sm font-semibold text-slate-900 leading-none truncate max-w-[200px]">{title}</span>
-                    </div>
+            {/* PageHeader with autosave status */}
+            <PageHeader
+                title={title}
+                onTitleChange={setTitle}
+                lastSaved={lastSaved || undefined}
+                isSaving={isSaving}
+                breadcrumbs={[
+                    { id: 'workspace', title: 'My Workspace', onClick: () => { } },
+                    { id: 'current', title: title || 'Untitled' }
+                ]}
+            />
 
+            {/* Header Actions Bar */}
+            <header className="flex-none bg-white border-b border-slate-100 z-30 px-6 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
                     {/* Connection Status Indicator */}
-                    <div className={`ml-3 flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${isConnected
-                            ? 'bg-green-50 text-green-600'
-                            : 'bg-amber-50 text-amber-600'
+                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${isConnected
+                        ? 'bg-green-50 text-green-600'
+                        : 'bg-amber-50 text-amber-600'
                         }`}>
                         {isConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
                         {isConnected ? (isSynced ? 'Synced' : 'Syncing...') : 'Offline'}
@@ -197,7 +209,6 @@ const Editor: React.FC<EditorProps> = ({ document, updateDocument, users }) => {
                                 {user.isActive && (
                                     <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
                                 )}
-                                {/* Tooltip */}
                                 <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                                     {user.name} {user.isActive && '(online)'}
                                 </div>
