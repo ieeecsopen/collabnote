@@ -79,13 +79,22 @@ router.patch('/move/:pageId', async (req: AuthRequest, res: Response) => {
 
             newOrderIndex = (afterPage?.order_index || 0) + 1;
 
-            // Shift other pages down
-            await supabaseAdmin
+            // Get pages to shift and update them individually
+            const { data: pagesToShift } = await supabaseAdmin
                 .from('documents')
-                .update({ order_index: supabaseAdmin.raw('order_index + 1') })
+                .select('id, order_index')
                 .eq('parent_id', parent_id || null)
                 .gte('order_index', newOrderIndex)
                 .neq('id', pageId);
+
+            if (pagesToShift) {
+                for (const page of pagesToShift) {
+                    await supabaseAdmin
+                        .from('documents')
+                        .update({ order_index: page.order_index + 1 })
+                        .eq('id', page.id);
+                }
+            }
         }
 
         const { data, error } = await supabaseAdmin
