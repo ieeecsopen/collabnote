@@ -5,6 +5,7 @@ import documentRoutes from './routes/documents';
 import authRoutes from './routes/auth';
 import pagesRoutes from './routes/pages';
 import workspacesRoutes from './routes/workspaces';
+import commentsRoutes from './routes/comments';
 import { authenticateUser } from './middleware/auth';
 import { authRateLimiter, apiRateLimiter } from './middleware/rateLimiter';
 
@@ -37,5 +38,6 @@ app.use('/api/auth', authRateLimiter, authRoutes);
 app.use('/api/documents', authenticateUser, documentRoutes);
 app.use('/api/pages', authenticateUser, pagesRoutes);
 app.use('/api/workspaces', authenticateUser, workspacesRoutes);
+app.use('/api/comments', authenticateUser, commentsRoutes);
 
 export default app;
