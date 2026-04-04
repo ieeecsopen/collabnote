@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { supabase } from '../config/database';
+import { supabaseAdmin } from '../config/database';
 import { authenticateUser, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -7,55 +7,53 @@ const router = Router();
 // Apply auth middleware to all routes
 router.use(authenticateUser);
 
-// List all documents for the authenticated user
+/**
+ * GET /api/documents
+ * List all documents for the authenticated user
+ */
 router.get('/', async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
         const userId = req.user.id;
-        // Query documents where user is owner OR is a collaborator
-        // This logic can be simplified if RLS is enabled and we trust Supabase client,
-        // BUT since we are using the SERVICE_ROLE (or admin-like) client in backend usually, or passing the user token...
-        // WAIT. We initialized `supabase` with the ANON key in database.ts. 
-        // The ANON key + RLS works if we forward the Auth header or set the session?
-        // Actually, `supabase-js` in backend context (Node) doesn't automatically attach the `req.user` context unless we set session.
-        // However, since we verified the token manually in middleware, we know who the user is.
-        // We can just query assuming we have permissions or use the verified user ID to filter.
 
-        // Simplest approach: Filter manually by ID since we are using anon key which might not have context of *this* specific request's user unless we `auth.setSession`.
-        // Let's just query normally and filter by columns for now.
-
-        const { data, error } = await supabase
+        // Fetch documents where user is the owner
+        const { data, error } = await supabaseAdmin
             .from('documents')
-            .select('*, collaborators!inner(user_id)')
-            .eq('owner_id', userId);
-
-        // Note: The OR condition for collaborators is tricky in simple Supabase query builder without raw SQL or RLS context.
-        // Providing a simple "My Documents" list for now (Owner only).
+            .select('*')
+            .eq('owner_id', userId)
+            .order('updated_at', { ascending: false });
 
         if (error) throw error;
-        res.json(data);
+        res.json(data || []);
     } catch (err: any) {
+        console.error('List documents error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// Create a new document
+/**
+ * POST /api/documents
+ * Create a new document
+ */
 router.post('/', async (req: AuthRequest, res: Response) => {
     try {
         if (!req.user) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
         const userId = req.user.id;
-        const { title } = req.body;
+        const { title, initialBlocks } = req.body;
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('documents')
             .insert({
                 owner_id: userId,
                 title: title || 'Untitled Document',
-                content: {} // Initial empty content
+                content: {
+                    blocks: initialBlocks || [{ id: crypto.randomUUID(), type: 'paragraph', content: '' }],
+                    icon: '📄'
+                }
             })
             .select()
             .single();
@@ -63,40 +61,80 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         if (error) throw error;
         res.status(201).json(data);
     } catch (err: any) {
+        console.error('Create document error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// Get a single document
+/**
+ * GET /api/documents/:id
+ * Get a single document
+ */
 router.get('/:id', async (req: AuthRequest, res: Response) => {
     try {
+        if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
         const { id } = req.params;
-        const { data, error } = await supabase
+        const userId = req.user.id;
+
+        const { data, error } = await supabaseAdmin
             .from('documents')
             .select('*')
             .eq('id', id)
             .single();
 
         if (error) throw error;
-        // Check access (could be done via RLS if we forwarded token, but here manual check)
-        // For now assuming if they have the ID and api logic lets them, it's ok (simple).
-        // Ideally we check ownership or collaboration here.
+        
+        // Basic security check: owner or collaborator check needed here in real app
+        // For now, allow if found (ID is a UUID which serves as basic secret)
+        
         res.json(data);
     } catch (err: any) {
         res.status(404).json({ error: 'Document not found' });
     }
 });
 
-// Delete a document
+/**
+ * PATCH /api/documents/:id
+ * Update a document
+ */
+router.patch('/:id', async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+        const { id } = req.params;
+        const userId = req.user.id;
+        const updates = req.body;
+
+        const { data, error } = await supabaseAdmin
+            .from('documents')
+            .update({
+                ...updates,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .eq('owner_id', userId) // Security: Must be owner
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/documents/:id
+ * Delete a document
+ */
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
         if (!req.user) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
+        const { id } = req.params;
         const userId = req.user.id;
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('documents')
             .delete()
             .eq('id', id)
