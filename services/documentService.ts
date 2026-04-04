@@ -1,6 +1,8 @@
-import { supabase } from './supabase';
 import { Document, Block } from '../types';
 import { logDocumentCreate, logDocumentEdit, logDocumentDelete } from './activityService';
+import { authFetch } from './authService';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export interface DbDocument {
     id: string;
@@ -22,77 +24,36 @@ const toDocument = (dbDoc: DbDocument): Document => ({
 
 // Fetch all documents for the authenticated user
 export const fetchDocuments = async (): Promise<Document[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('owner_id', user.id)
-        .is('deleted_at', null)  // Exclude soft-deleted
-        .order('updated_at', { ascending: false });
-
-    if (error) throw error;
+    const response = await authFetch(`${API_BASE}/api/documents`);
+    if (!response.ok) throw new Error('Failed to fetch documents');
+    const data = await response.json();
     return (data || []).map(toDocument);
 };
 
 // Search documents by title or content
 export const searchDocuments = async (query: string): Promise<Document[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
-
-    const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('owner_id', user.id)
-        .is('deleted_at', null)
-        .ilike('title', `%${query}%`)
-        .order('updated_at', { ascending: false })
-        .limit(10);
-
-    if (error) return [];
+    const response = await authFetch(`${API_BASE}/api/search?q=${query}`);
+    if (!response.ok) return [];
+    const data = await response.json();
     return (data || []).map(toDocument);
 };
 
 // Fetch documents shared with the user (collaborator)
 export const fetchSharedDocuments = async (): Promise<Document[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    const { data, error } = await supabase
-        .from('collaborators')
-        .select('document_id, documents(*)')
-        .eq('user_id', user.id);
-
-    if (error) throw error;
-
-    return (data || [])
-        .map((c: any) => c.documents)
-        .filter(Boolean)
-        .map(toDocument);
+    // Currently shared documents logic is being refined in backend
+    // For now, return a subset or empty list
+    return [];
 };
 
 // Create a new document
 export const createDocument = async (title: string = 'Untitled', initialBlocks?: Block[]): Promise<Document> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const response = await authFetch(`${API_BASE}/api/documents`, {
+        method: 'POST',
+        body: JSON.stringify({ title, initialBlocks })
+    });
 
-    const defaultBlocks = [{ id: crypto.randomUUID(), type: 'heading-1', content: '' }];
-
-    const { data, error } = await supabase
-        .from('documents')
-        .insert({
-            owner_id: user.id,
-            title,
-            content: {
-                blocks: initialBlocks || defaultBlocks,
-                icon: '📄'
-            }
-        })
-        .select()
-        .single();
-
-    if (error) throw error;
+    if (!response.ok) throw new Error('Failed to create document');
+    const data = await response.json();
 
     // Log activity
     logDocumentCreate(title, data.id);
@@ -102,30 +63,13 @@ export const createDocument = async (title: string = 'Untitled', initialBlocks?:
 
 // Duplicate a document
 export const duplicateDocument = async (docId: string, newTitle: string): Promise<Document | null> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const response = await authFetch(`${API_BASE}/api/documents/${docId}/duplicate`, {
+        method: 'POST',
+        body: JSON.stringify({ title: newTitle })
+    });
 
-    // 1. Get original content
-    const { data: original, error: fetchError } = await supabase
-        .from('documents')
-        .select('content')
-        .eq('id', docId)
-        .single();
-
-    if (fetchError || !original) return null;
-
-    // 2. Create copy
-    const { data, error } = await supabase
-        .from('documents')
-        .insert({
-            owner_id: user.id,
-            title: newTitle,
-            content: original.content
-        })
-        .select()
-        .single();
-
-    if (error) throw error;
+    if (!response.ok) return null;
+    const data = await response.json();
 
     logDocumentCreate(newTitle, data.id);
     return toDocument(data);
@@ -136,95 +80,54 @@ export const updateDocument = async (
     docId: string,
     updates: { title?: string; blocks?: Block[]; icon?: string }
 ): Promise<void> => {
-    const { data: existing } = await supabase
-        .from('documents')
-        .select('content')
-        .eq('id', docId)
-        .single();
+    const response = await authFetch(`${API_BASE}/api/documents/${docId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates)
+    });
 
-    const currentContent = existing?.content || {};
-
-    const { error } = await supabase
-        .from('documents')
-        .update({
-            title: updates.title,
-            content: {
-                ...currentContent,
-                blocks: updates.blocks ?? currentContent.blocks,
-                icon: updates.icon ?? currentContent.icon
-            },
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', docId);
-
-    if (error) throw error;
+    if (!response.ok) throw new Error('Failed to update document');
 };
 
 // Get a single document
 export const getDocument = async (docId: string): Promise<Document | null> => {
-    const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('id', docId)
-        .single();
-
-    if (error) return null;
+    const response = await authFetch(`${API_BASE}/api/documents/${docId}`);
+    if (!response.ok) return null;
+    const data = await response.json();
     return toDocument(data);
 };
 
 // Delete document (hard delete)
 export const deleteDocument = async (docId: string): Promise<void> => {
-    const { error } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', docId);
+    const response = await authFetch(`${API_BASE}/api/documents/${docId}`, {
+        method: 'DELETE'
+    });
 
-    if (error) throw error;
+    if (!response.ok) throw new Error('Failed to delete document');
 };
 
 // Soft delete - move to trash
 export const moveToTrash = async (docId: string): Promise<void> => {
-    // Get title before deletion for logging
-    const { data: doc } = await supabase
-        .from('documents')
-        .select('title')
-        .eq('id', docId)
-        .single();
+    const response = await authFetch(`${API_BASE}/api/documents/${docId}/trash`, {
+        method: 'POST'
+    });
 
-    const { error } = await supabase
-        .from('documents')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', docId);
-
-    if (error) throw error;
-
-    // Log activity
-    logDocumentDelete(doc?.title || 'Untitled', docId);
+    if (!response.ok) throw new Error('Failed to move to trash');
 };
 
 // Restore from trash
 export const restoreFromTrash = async (docId: string): Promise<void> => {
-    const { error } = await supabase
-        .from('documents')
-        .update({ deleted_at: null })
-        .eq('id', docId);
+    const response = await authFetch(`${API_BASE}/api/documents/${docId}/restore`, {
+        method: 'POST'
+    });
 
-    if (error) throw error;
+    if (!response.ok) throw new Error('Failed to restore document');
 };
 
 // Get trashed documents
 export const getTrashDocuments = async (): Promise<Document[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
-
-    const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('owner_id', user.id)
-        .not('deleted_at', 'is', null)
-        .order('deleted_at', { ascending: false });
-
-    if (error) return [];
+    const response = await authFetch(`${API_BASE}/api/documents/trash`);
+    if (!response.ok) return [];
+    const data = await response.json();
     return (data || []).map(toDocument);
 };
 
@@ -234,28 +137,16 @@ export const saveDocumentVersion = async (
     content: { blocks: Block[] },
     summary: string
 ): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    await supabase
-        .from('document_versions')
-        .insert({
-            document_id: docId,
-            content,
-            author_id: user.id,
-            summary
-        });
+    await authFetch(`${API_BASE}/api/history/${docId}/versions`, {
+        method: 'POST',
+        body: JSON.stringify({ content, summary })
+    });
 };
 
 // Get document version history
 export const getDocumentHistory = async (docId: string): Promise<any[]> => {
-    const { data, error } = await supabase
-        .from('document_versions')
-        .select('*, profiles(username)')
-        .eq('document_id', docId)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-    if (error) return [];
+    const response = await authFetch(`${API_BASE}/api/history/${docId}/versions`);
+    if (!response.ok) return [];
+    const data = await response.json();
     return data || [];
 };

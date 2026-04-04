@@ -1,4 +1,6 @@
-import { supabase } from './supabase';
+import { authFetch } from './authService';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export interface UserSettings {
     theme: 'light' | 'dark' | 'system';
@@ -22,46 +24,38 @@ const defaultSettings: UserSettings = {
 
 // Get user settings
 export const getSettings = async (): Promise<UserSettings> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return defaultSettings;
+    try {
+        const response = await authFetch(`${API_BASE}/api/settings`);
+        if (!response.ok) return defaultSettings;
+        const data = await response.json();
+        
+        if (!data || Object.keys(data).length === 0) {
+            return defaultSettings;
+        }
 
-    const { data, error } = await supabase
-        .from('user_settings')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-    if (error || !data) {
-        // Create default settings if not exists
-        await saveSettings(defaultSettings);
+        return {
+            theme: data.theme || 'system',
+            email_notifications: data.email_notifications ?? true,
+            desktop_notifications: data.desktop_notifications ?? true,
+            weekly_digest: data.weekly_digest ?? false,
+            language: data.language || 'en',
+            timezone: data.timezone || 'UTC',
+            has_seen_onboarding: data.has_seen_onboarding ?? false,
+        };
+    } catch (error) {
+        console.error('Error fetching settings:', error);
         return defaultSettings;
     }
-
-    return {
-        theme: data.theme || 'system',
-        email_notifications: data.email_notifications ?? true,
-        desktop_notifications: data.desktop_notifications ?? true,
-        weekly_digest: data.weekly_digest ?? false,
-        language: data.language || 'en',
-        timezone: data.timezone || 'UTC',
-        has_seen_onboarding: data.has_seen_onboarding ?? false,
-    };
 };
 
 // Save user settings
 export const saveSettings = async (settings: Partial<UserSettings>): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const response = await authFetch(`${API_BASE}/api/settings`, {
+        method: 'POST',
+        body: JSON.stringify(settings)
+    });
 
-    const { error } = await supabase
-        .from('user_settings')
-        .upsert({
-            user_id: user.id,
-            ...settings,
-            updated_at: new Date().toISOString()
-        });
-
-    if (error) throw error;
+    if (!response.ok) throw new Error('Failed to save settings');
 };
 
 // Update single setting

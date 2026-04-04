@@ -10,6 +10,8 @@ import searchRoutes from './routes/search';
 import notificationsRoutes from './routes/notifications';
 import historyRoutes from './routes/history';
 import treeRoutes from './routes/tree';
+import settingsRoutes from './routes/settings';
+import profilesRoutes from './routes/profiles';
 import { authenticateUser } from './middleware/auth';
 import { authRateLimiter, apiRateLimiter } from './middleware/rateLimiter';
 
@@ -47,5 +49,7 @@ app.use('/api/search', authenticateUser, searchRoutes);
 app.use('/api/notifications', authenticateUser, notificationsRoutes);
 app.use('/api/history', authenticateUser, historyRoutes);
 app.use('/api/tree', authenticateUser, treeRoutes);
+app.use('/api/settings', authenticateUser, settingsRoutes);
+app.use('/api/profiles', authenticateUser, profilesRoutes);
 
 export default app;

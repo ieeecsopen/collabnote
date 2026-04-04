@@ -34,6 +34,19 @@ create table public.profiles (
   constraint username_length check (char_length(username) >= 3)
 );
 
+-- Create a table for user settings
+create table public.user_settings (
+  user_id uuid references public.users(id) not null primary key,
+  theme text default 'system',
+  email_notifications boolean default true,
+  desktop_notifications boolean default true,
+  weekly_digest boolean default false,
+  language text default 'en',
+  timezone text default 'UTC',
+  has_seen_onboarding boolean default false,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 alter table public.profiles enable row level security;
 
 create policy "Public profiles are viewable by everyone." on profiles
@@ -115,8 +128,14 @@ create policy "Users can view own collaborations" on collaborators
 create or replace function public.handle_new_user() 
 returns trigger as $$
 begin
+  -- Create profile
   insert into public.profiles (id, username, avatar_url)
   values (new.id, new.name, new.avatar_url);
+  
+  -- Create default settings
+  insert into public.user_settings (user_id)
+  values (new.id);
+  
   return new;
 end;
 $$ language plpgsql security definer;
@@ -125,3 +144,12 @@ $$ language plpgsql security definer;
 create or replace trigger on_user_created
   after insert on public.users
   for each row execute procedure public.handle_new_user();
+-- Create a table for document versions (history)
+create table public.document_versions (
+  id uuid default gen_random_uuid() primary key,
+  document_id uuid references public.documents(id) on delete cascade not null,
+  content jsonb not null,
+  author_id uuid references public.users(id) not null,
+  summary text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);

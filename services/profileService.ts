@@ -1,5 +1,7 @@
-import { supabase } from './supabase';
 import { User } from '../types';
+import { authFetch } from './authService';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export interface Profile {
     id: string;
@@ -26,71 +28,49 @@ const getColorForUser = (userId: string): string => {
 
 // Get current user's profile
 export const getCurrentProfile = async (): Promise<User | null> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-    if (error) {
-        // Profile might not exist yet, create from auth user metadata
-        return {
-            id: user.id,
-            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-            avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${user.id}`,
-            color: 'blue',
-            isActive: true,
-        };
+    try {
+        const response = await authFetch(`${API_BASE}/api/profiles/me`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return toUser(data);
+    } catch (error) {
+        console.error('Error fetching current profile:', error);
+        return null;
     }
-
-    return toUser(data);
 };
 
 // Get a profile by ID
 export const getProfile = async (userId: string): Promise<User | null> => {
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-    if (error) return null;
-    return toUser(data);
+    try {
+        const response = await authFetch(`${API_BASE}/api/profiles/${userId}`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return toUser(data);
+    } catch (error) {
+        return null;
+    }
 };
 
 // Update user profile
 export const updateProfile = async (
     updates: { username?: string; avatar_url?: string }
 ): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const response = await authFetch(`${API_BASE}/api/profiles/me`, {
+        method: 'PUT',
+        body: JSON.stringify(updates)
+    });
 
-    const { error } = await supabase
-        .from('profiles')
-        .update({
-            ...updates,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
-
-    if (error) throw error;
+    if (!response.ok) throw new Error('Failed to update profile');
 };
 
 // Get collaborators for a document
 export const getDocumentCollaborators = async (documentId: string): Promise<User[]> => {
-    const { data, error } = await supabase
-        .from('collaborators')
-        .select('user_id, role, profiles(*)')
-        .eq('document_id', documentId);
-
-    if (error) return [];
-
-    return (data || [])
-        .filter((c: any) => c.profiles)
-        .map((c: any) => toUser(c.profiles, true));
+    // This endpoint should be implement in documents or collaborators route
+    const response = await authFetch(`${API_BASE}/api/documents/${documentId}/collaborators`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    
+    return (data || []).map((p: any) => toUser(p, true));
 };
 
 // Add collaborator to document
@@ -99,15 +79,12 @@ export const addCollaborator = async (
     userId: string,
     role: 'view' | 'edit' = 'view'
 ): Promise<void> => {
-    const { error } = await supabase
-        .from('collaborators')
-        .insert({
-            document_id: documentId,
-            user_id: userId,
-            role
-        });
+    const response = await authFetch(`${API_BASE}/api/documents/${documentId}/collaborators`, {
+        method: 'POST',
+        body: JSON.stringify({ userId, role })
+    });
 
-    if (error) throw error;
+    if (!response.ok) throw new Error('Failed to add collaborator');
 };
 
 // Remove collaborator from document
@@ -115,25 +92,20 @@ export const removeCollaborator = async (
     documentId: string,
     userId: string
 ): Promise<void> => {
-    const { error } = await supabase
-        .from('collaborators')
-        .delete()
-        .eq('document_id', documentId)
-        .eq('user_id', userId);
+    const response = await authFetch(`${API_BASE}/api/documents/${documentId}/collaborators/${userId}`, {
+        method: 'DELETE'
+    });
 
-    if (error) throw error;
+    if (!response.ok) throw new Error('Failed to remove collaborator');
 };
 
 // Search users by username (for adding collaborators)
 export const searchUsers = async (query: string): Promise<User[]> => {
     if (!query || query.length < 2) return [];
 
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('username', `%${query}%`)
-        .limit(10);
-
-    if (error) return [];
+    const response = await authFetch(`${API_BASE}/api/profiles/search?q=${query}`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    
     return (data || []).map(p => toUser(p));
 };
