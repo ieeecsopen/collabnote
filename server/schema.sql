@@ -144,12 +144,15 @@ $$ language plpgsql security definer;
 create or replace trigger on_user_created
   after insert on public.users
   for each row execute procedure public.handle_new_user();
--- Create a table for document versions (history)
-create table public.document_versions (
+-- Create a table for snapshots (history)
+create table public.snapshots (
   id uuid default gen_random_uuid() primary key,
-  document_id uuid references public.documents(id) on delete cascade not null,
-  content jsonb not null,
-  author_id uuid references public.users(id) not null,
-  summary text,
+  page_id uuid references public.documents(id) on delete cascade not null,
+  title text,
+  snapshot_data text not null, -- Store as JSON string or YJS update
+  saved_by uuid references public.users(id) not null,
+  saved_by_name text,
+  description text,
+  is_auto boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

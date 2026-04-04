@@ -18,7 +18,7 @@ async function resetDb() {
         const dropQueries = [
             'DROP TRIGGER IF EXISTS on_user_created ON public.users',
             'DROP FUNCTION IF EXISTS public.handle_new_user()',
-            'DROP TABLE IF EXISTS public.document_versions CASCADE',
+            'DROP TABLE IF EXISTS public.snapshots CASCADE',
             'DROP TABLE IF EXISTS public.collaborators CASCADE',
             'DROP TABLE IF EXISTS public.documents CASCADE',
             'DROP TABLE IF EXISTS public.profiles CASCADE',
