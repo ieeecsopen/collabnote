@@ -110,8 +110,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             {/* Left Side - Brand & Aesthetic */}
             <div className="hidden lg:flex w-1/2 bg-slate-950 flex-col justify-between p-12 text-white relative overflow-hidden">
                 {/* Decorative Background Elements */}
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-500/20 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-slate-500/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
 
                 <div className="relative z-10">
                     <div className="inline-flex items-center gap-3">
@@ -125,7 +125,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <div className="relative z-10 max-w-lg">
                     <h1 className="text-4xl font-bold mb-6 leading-tight">
                         Capture ideas,<br />
-                        <span className="text-indigo-400">collaborate</span> seamlessly.
+                        <span className="text-slate-300">collaborate</span> seamlessly.
                     </h1>
                     <p className="text-slate-400 text-lg leading-relaxed">
                         The all-in-one workspace for your team's knowledge, docs, and projects.
@@ -228,7 +228,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleViewChange('forgot-password')}
-                                                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                                                    className="text-xs text-slate-500 hover:text-slate-900 font-medium"
                                                 >
                                                     Forgot password?
                                                 </button>

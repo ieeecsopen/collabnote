@@ -40,19 +40,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, onAuthChan
         isActive: true,
     });
 
-    // BYPASS AUTH: Set mock user immediately
-    // TODO: Remove this bypass when auth is fully configured
+    // Check authentication on mount
     useEffect(() => {
-        const mockUser: User = {
-            id: 'bypass-user-001',
-            name: 'Dev User',
-            avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=bypass-user',
-            color: 'blue',
-            isActive: true,
+        const initAuth = async () => {
+            try {
+                const data = await authService.checkAuth();
+                if (data && data.user) {
+                    const appUser = toAppUser(data.user);
+                    setUser(appUser);
+                    onAuthChange?.(appUser);
+                }
+            } catch (error) {
+                console.error('Initial auth check failed:', error);
+            } finally {
+                setIsLoading(false);
+            }
         };
-        setUser(mockUser);
-        onAuthChange?.(mockUser);
-        setIsLoading(false);
+
+        initAuth();
     }, [onAuthChange]);
 
     // Set up token refresh interval

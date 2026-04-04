@@ -11,7 +11,7 @@ export const authRateLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { ip: false }, // Disable IP validation warning
+    validate: { default: true, keyGeneratorIpFallback: false },
     keyGenerator: (req: Request) => {
         // Use X-Forwarded-For header if behind a proxy, otherwise use IP
         return (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
@@ -35,7 +35,7 @@ export const loginRateLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { ip: false }, // Disable IP validation warning
+    validate: { default: true, keyGeneratorIpFallback: false },
     keyGenerator: (req: Request) => {
         // Combine IP with email for more granular limiting
         const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||

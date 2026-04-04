@@ -1,6 +1,32 @@
--- Create a table for public profiles referenced to auth.users
+-- Create a table for users
+create table public.users (
+  id uuid default gen_random_uuid() primary key,
+  email text unique not null,
+  password_hash text not null,
+  name text,
+  avatar_url text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  failed_login_attempts int default 0,
+  locked_until timestamp with time zone,
+  email_verified boolean default false,
+  metadata jsonb default '{}'::jsonb
+);
+
+-- Create a table for refresh tokens
+create table public.refresh_tokens (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.users(id) on delete cascade not null,
+  token_hash text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  expires_at timestamp with time zone not null,
+  revoked boolean default false,
+  user_agent text,
+  ip_address text
+);
+
+-- Create a table for public profiles
 create table public.profiles (
-  id uuid references auth.users not null primary key,
+  id uuid references public.users(id) not null primary key,
   username text,
   avatar_url text,
   updated_at timestamp with time zone,
@@ -26,7 +52,7 @@ create table public.documents (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
   title text default 'Untitled Document',
   content jsonb, -- Store snapshot of document content
-  owner_id uuid references public.profiles(id) not null
+  owner_id uuid references public.users(id) not null
 );
 
 alter table public.documents enable row level security;
@@ -90,12 +116,12 @@ create or replace function public.handle_new_user()
 returns trigger as $$
 begin
   insert into public.profiles (id, username, avatar_url)
-  values (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url');
+  values (new.id, new.name, new.avatar_url);
   return new;
 end;
 $$ language plpgsql security definer;
 
 -- Trigger to call the function on signup
-create or replace trigger on_auth_user_created
-  after insert on auth.users
+create or replace trigger on_user_created
+  after insert on public.users
   for each row execute procedure public.handle_new_user();
