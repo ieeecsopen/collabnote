@@ -51,12 +51,13 @@ export const authFetch = async (url: string, options: RequestInit = {}): Promise
         credentials: 'include', // Include cookies for refresh token
     });
 
-    // If token expired, try to refresh
-    if (response.status === 401 && accessToken) {
+    // If token expired or missing, try to refresh
+    if (response.status === 401) {
         const refreshed = await refreshTokens();
         if (refreshed) {
             // Retry request with new token
-            (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+            const newAccessToken = getAccessToken();
+            (headers as Record<string, string>)['Authorization'] = `Bearer ${newAccessToken}`;
             return fetch(url, {
                 ...options,
                 headers,

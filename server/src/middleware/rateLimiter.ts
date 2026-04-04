@@ -5,7 +5,7 @@ import { Request, Response } from 'express';
 // Limits to 5 requests per 15 minutes per IP
 export const authRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // 10 requests per window (allows some retries)
+    max: 100, // Relaxed for development testing
     message: {
         error: 'Too many requests. Please try again later.'
     },
@@ -29,7 +29,7 @@ export const authRateLimiter = rateLimit({
 // Stricter rate limiter for login specifically
 export const loginRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // 5 login attempts per window
+    max: 100, // Relaxed for development testing
     message: {
         error: 'Too many login attempts. Please try again later.'
     },

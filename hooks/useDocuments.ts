@@ -7,6 +7,7 @@ import {
     duplicateDocument as duplicateDoc,
     deleteDocument as deleteDoc
 } from '../services/documentService';
+import { useAuth } from '../hooks/useAuth';
 
 interface UseDocumentsReturn {
     workspaces: Workspace[];
@@ -23,6 +24,7 @@ export const useDocuments = (): UseDocumentsReturn => {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { user } = useAuth();
 
     // Convert flat document list to workspace structure
     const buildWorkspaces = (docs: Document[]): Workspace[] => {
@@ -45,6 +47,8 @@ export const useDocuments = (): UseDocumentsReturn => {
     };
 
     const loadDocuments = useCallback(async () => {
+        if (!user) return;
+        
         setIsLoading(true);
         setError(null);
         try {
@@ -53,16 +57,20 @@ export const useDocuments = (): UseDocumentsReturn => {
         } catch (err: any) {
             console.error('Error loading documents:', err);
             setError(err.message || 'Failed to load documents');
-            // Return empty workspace on error
             setWorkspaces(buildWorkspaces([]));
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
-        loadDocuments();
-    }, [loadDocuments]);
+        if (user) {
+            loadDocuments();
+        } else {
+            setIsLoading(false);
+            setWorkspaces(buildWorkspaces([]));
+        }
+    }, [loadDocuments, user]);
 
     const createDocument = useCallback(async (folderId?: string, title?: string, initialBlocks?: any[]): Promise<Document | null> => {
         try {
