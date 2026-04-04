@@ -7,6 +7,21 @@ const router = Router();
 // Apply auth middleware to all routes
 router.use(authenticateUser);
 
+const isMissingColumnError = (err: any, columnName: string): boolean => {
+    const message = String(err?.message || '').toLowerCase();
+    const details = String(err?.details || '').toLowerCase();
+    const hint = String(err?.hint || '').toLowerCase();
+    const code = String(err?.code || '').toLowerCase();
+    const column = columnName.toLowerCase();
+
+    return (
+        code === '42703' ||
+        message.includes(column) ||
+        details.includes(column) ||
+        hint.includes(column)
+    );
+};
+
 // List all documents for the authenticated user (NOT trashed)
 router.get('/', async (req: AuthRequest, res: Response) => {
     try {
@@ -20,8 +35,23 @@ router.get('/', async (req: AuthRequest, res: Response) => {
             .is('deleted_at', null)
             .order('updated_at', { ascending: false });
 
-        if (error) throw error;
-        res.json(data || []);
+        if (!error) {
+            return res.json(data || []);
+        }
+
+        // Backward compatibility for databases that have not run deleted_at migration yet.
+        if (isMissingColumnError(error, 'deleted_at')) {
+            const { data: fallbackData, error: fallbackError } = await supabaseAdmin
+                .from('documents')
+                .select('*')
+                .eq('owner_id', userId)
+                .order('updated_at', { ascending: false });
+
+            if (fallbackError) throw fallbackError;
+            return res.json(fallbackData || []);
+        }
+
+        throw error;
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -40,8 +70,15 @@ router.get('/trash', async (req: AuthRequest, res: Response) => {
             .not('deleted_at', 'is', null)
             .order('deleted_at', { ascending: false });
 
-        if (error) throw error;
-        res.json(data || []);
+        if (!error) {
+            return res.json(data || []);
+        }
+
+        if (isMissingColumnError(error, 'deleted_at')) {
+            return res.json([]);
+        }
+
+        throw error;
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -299,7 +336,14 @@ router.post('/:id/trash', async (req: AuthRequest, res: Response) => {
             .eq('id', id)
             .eq('owner_id', userId);
 
-        if (error) throw error;
+        if (error) {
+            if (isMissingColumnError(error, 'deleted_at')) {
+                return res.status(409).json({
+                    error: 'Trash feature unavailable: missing deleted_at column. Run latest migrations.'
+                });
+            }
+            throw error;
+        }
         res.json({ message: 'Moved to trash' });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -319,7 +363,14 @@ router.post('/:id/restore', async (req: AuthRequest, res: Response) => {
             .eq('id', id)
             .eq('owner_id', userId);
 
-        if (error) throw error;
+        if (error) {
+            if (isMissingColumnError(error, 'deleted_at')) {
+                return res.status(409).json({
+                    error: 'Restore feature unavailable: missing deleted_at column. Run latest migrations.'
+                });
+            }
+            throw error;
+        }
         res.json({ message: 'Restored' });
     } catch (err: any) {
         res.status(500).json({ error: err.message });

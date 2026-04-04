@@ -4,6 +4,15 @@ import { authFetch } from './authService';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+const getApiError = async (response: Response, fallback: string): Promise<string> => {
+    try {
+        const data = await response.json() as { error?: string; message?: string };
+        return data.error || data.message || fallback;
+    } catch {
+        return fallback;
+    }
+};
+
 export interface DbDocument {
     id: string;
     title: string;
@@ -25,7 +34,10 @@ const toDocument = (dbDoc: DbDocument): Document => ({
 // Fetch all documents for the authenticated user
 export const fetchDocuments = async (): Promise<Document[]> => {
     const response = await authFetch(`${API_BASE}/api/documents`);
-    if (!response.ok) throw new Error('Failed to fetch documents');
+    if (!response.ok) {
+        const detail = await getApiError(response, 'Failed to fetch documents');
+        throw new Error(`Failed to fetch documents (${response.status}): ${detail}`);
+    }
     const data = await response.json();
     return (data || []).map(toDocument);
 };
