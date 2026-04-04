@@ -26,6 +26,15 @@ const getColorForUser = (userId: string): string => {
     return colors[hash % colors.length];
 };
 
+const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+    try {
+        const data = await response.json() as { error?: string; message?: string };
+        return data.error || data.message || fallback;
+    } catch {
+        return fallback;
+    }
+};
+
 // Get current user's profile
 export const getCurrentProfile = async (): Promise<User | null> => {
     try {
@@ -65,7 +74,6 @@ export const updateProfile = async (
 
 // Get collaborators for a document
 export const getDocumentCollaborators = async (documentId: string): Promise<User[]> => {
-    // This endpoint should be implement in documents or collaborators route
     const response = await authFetch(`${API_BASE}/api/documents/${documentId}/collaborators`);
     if (!response.ok) return [];
     const data = await response.json();
@@ -84,7 +92,9 @@ export const addCollaborator = async (
         body: JSON.stringify({ userId, role })
     });
 
-    if (!response.ok) throw new Error('Failed to add collaborator');
+    if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Failed to add collaborator'));
+    }
 };
 
 // Remove collaborator from document
@@ -96,7 +106,9 @@ export const removeCollaborator = async (
         method: 'DELETE'
     });
 
-    if (!response.ok) throw new Error('Failed to remove collaborator');
+    if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Failed to remove collaborator'));
+    }
 };
 
 // Search users by username (for adding collaborators)

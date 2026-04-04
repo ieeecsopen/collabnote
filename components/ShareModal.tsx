@@ -29,6 +29,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, documentId, do
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<User[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [peopleError, setPeopleError] = useState<string | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -69,6 +70,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, documentId, do
 
     const handleSearch = async (query: string) => {
         setSearchQuery(query);
+        setPeopleError(null);
         if (query.length < 2) {
             setSearchResults([]);
             return;
@@ -80,15 +82,25 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, documentId, do
     };
 
     const handleAddCollaborator = async (user: User) => {
-        await addCollaborator(documentId, user.id, 'edit');
-        setCollaborators(prev => [...prev, user]);
-        setSearchQuery('');
-        setSearchResults([]);
+        try {
+            setPeopleError(null);
+            await addCollaborator(documentId, user.id, 'edit');
+            setCollaborators(prev => [...prev, user]);
+            setSearchQuery('');
+            setSearchResults([]);
+        } catch (error) {
+            setPeopleError(error instanceof Error ? error.message : 'Failed to add collaborator');
+        }
     };
 
     const handleRemoveCollaborator = async (userId: string) => {
-        await removeCollaborator(documentId, userId);
-        setCollaborators(prev => prev.filter(c => c.id !== userId));
+        try {
+            setPeopleError(null);
+            await removeCollaborator(documentId, userId);
+            setCollaborators(prev => prev.filter(c => c.id !== userId));
+        } catch (error) {
+            setPeopleError(error instanceof Error ? error.message : 'Failed to remove collaborator');
+        }
     };
 
     if (!isOpen) return null;
@@ -211,6 +223,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, documentId, do
                                     <Loader className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-slate-400" />
                                 )}
                             </div>
+                            {peopleError && (
+                                <p className="text-xs text-red-600">{peopleError}</p>
+                            )}
 
                             {/* Search Results */}
                             {searchResults.length > 0 && (
