@@ -1,107 +1,92 @@
 # CollabNote
 
-**CollabNote** is a next-generation collaborative workspace that fuses real-time document editing with advanced cognitive tools like Thinking Canvases, Decision Logs, and Knowledge Maps. It is designed to help teams think, plan, and create together in one seamless environment.
+A collaborative workspace that combines real-time document editing with spatial
+thinking tools — canvases, decision logs and knowledge maps — so a team's notes,
+reasoning and diagrams live in one place instead of three apps.
 
-![CollabNote Dashboard](https://via.placeholder.com/800x450.png?text=CollabNote+Dashboard)
+## Features
 
-## 🚀 Features
+- **Real-time collaboration** — concurrent editing over Yjs CRDTs and WebSockets.
+  No lock contention; edits merge without a central arbiter.
+- **Thinking Canvas** — a spatial surface (React Flow) for brainstorming and
+  diagramming alongside the document.
+- **Decision Log** — records decisions with their context, so the *why* survives
+  after the discussion scrolls away.
+- **Knowledge Map** — a force-directed graph of how documents relate.
+- **AI assistance** — Gemini-backed summarising and drafting.
 
-- **📝 Real-time Collaboration**: Edit documents together instantly using Yjs and WebSockets.
-- **🧠 Thinking Canvas**: A spatial canvas for brainstorming, diagramming, and organizing thoughts.
-- **⚖️ Decision Log**: Track architectural decisions, votes, and rationale (ADRs).
-- **🕸️ Knowledge Map**: Visualize connections between your documents and ideas.
-- **🎓 Study & Review Modes**: Dedicated modes for focused reading and active recall.
-- **📊 Analytics**: Insightful metrics on collaboration and document activity.
-- **🎨 Glassmorphism UI**: A premium, modern user interface with a sleek monochrome aesthetic.
+## Stack
 
-## 🛠️ Tech Stack
+| Layer | Technology |
+| --- | --- |
+| Frontend | React, Vite, TypeScript |
+| Realtime | Yjs, y-websocket |
+| Canvas / graph | React Flow, react-force-graph-2d |
+| Backend | Express, Supabase (Postgres) |
+| AI | Google Gemini (`@google/genai`) |
 
-### Frontend
-- **Framework**: React 19 + Vite
-- **Styling**: TailwindCSS (Custom Monochrome Theme)
-- **Collaboration**: Yjs, y-websocket
-- **Visualization**: React Flow, React Force Graph 2d
-- **Icons**: Lucide React
+## Getting started
 
-### Backend
-- **Runtime**: Node.js
-- **Framework**: Express
-- **Real-time**: WebSocket (ws)
-- **Database**: Supabase (PostgreSQL)
+**Prerequisites:** Node.js 20+, a Supabase project, a Gemini API key.
 
-## 📦 Installation & Setup
-
-### Prerequisites
-- Node.js (v18+)
-- npm or yarn
-- A Supabase project
-
-### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/collabnote.git
+git clone https://github.com/ieeecsopen/collabnote
 cd collabnote
-```
-
-### 2. Backend Setup
-Navigate to the server directory and install dependencies:
-```bash
-cd server
 npm install
 ```
 
-Create a `.env` file in the `server` directory:
-```env
-PORT=3000
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_service_role_key
-DB_PASSWORD=your_db_password
+Create `.env` in the project root:
+
+```ini
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_KEY=<anon/publishable key>
+VITE_API_URL=http://localhost:3001
+VITE_COLLABORATION_WS_URL=ws://localhost:1234
 ```
 
-Start the backend server:
+Create `server/.env` for the backend:
+
+```ini
+PORT=3001
+NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
+DATABASE_URL=<postgres connection string>
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_KEY=<anon key>
+SUPABASE_SERVICE_KEY=<service-role key - server only, never expose>
+GEMINI_API_KEY=<gemini key>
+JWT_ACCESS_SECRET=<random 32+ char string>
+JWT_REFRESH_SECRET=<different random 32+ char string>
+```
+
+> **Never commit either file.** `SUPABASE_SERVICE_KEY` bypasses every row-level
+> security policy, and the JWT secrets let anyone mint valid sessions. Both are
+> gitignored — keep it that way.
+
 ```bash
-npm run dev
+npm run dev      # frontend
+npm run build
+npm run preview
 ```
 
-### 3. Frontend Setup
-Open a new terminal, navigate to the root directory, and install dependencies:
-```bash
-cd ..
-npm install
-```
-
-Create a `.env.local` file in the root directory:
-```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_KEY=your_supabase_anon_key
-VITE_WEBSOCKET_URL=ws://localhost:3000
-```
-
-Start the frontend development server:
-```bash
-npm run dev
-```
-
-## 📂 Project Structure
+## Project layout
 
 ```
-collabnote/
-├── components/       # React components (Sidebar, Editor, Dashboard, etc.)
-├── contexts/         # React Contexts (Dialog, Auth)
-├── hooks/            # Custom Hooks (useAuth, useDocuments)
-├── server/           # Backend Node.js server
-│   ├── migrations/   # SQL migrations for Supabase
-│   └── src/          # Backend source code
-├── services/         # API services (documentService, profileService)
-├── index.html        # Entry point
-└── index.css         # Global styles & Tailwind config
+components/   React components
+contexts/     React context providers (auth, workspace)
+hooks/        Shared hooks
+services/     API and Supabase clients
+server/       Express backend (separate .env)
 ```
 
-## 🎨 Design System
+## Contributing
 
-CollabNote follows a strict **Monochrome Glassmorphism** design system:
-- **Colors**: Strictly grayscale (Slate/Zinc) with high contrast.
-- **Typography**: 'Outfit' for headings, 'Inter' for body, 'JetBrains Mono' for code.
-- **Effects**: Extensive use of `backdrop-blur` and semi-transparent backgrounds.
+See [CONTRIBUTING.md](https://github.com/ieeecsopen/.github/blob/main/CONTRIBUTING.md).
+Open an issue before starting anything substantial.
 
----
-Built with ❤️ for the future of work.
+Good areas to help with: offline/reconnect handling for the Yjs provider,
+accessibility on the canvas, and test coverage — there is very little today.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
